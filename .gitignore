@@ -1,0 +1,247 @@
+# =============================================================================
+# .gitignore — FinanceSap.Enterprise
+# Stack: .NET 9 · C# 13 · Visual Studio 2022 · MySQL (Docker)
+# =============================================================================
+
+
+# =============================================================================
+# [1] BUILD OUTPUT
+# Gerado automaticamente pelo compilador — nunca deve ser versionado.
+# Regenerado com `dotnet build` ou `dotnet restore`.
+# =============================================================================
+
+**/bin/
+**/obj/
+
+
+# =============================================================================
+# [2] SEGREDOS E CONFIGURAÇÕES SENSÍVEIS  ⚠️  CRÍTICO
+#
+# ATENÇÃO: o appsettings.json atual contém credenciais MySQL em texto plano.
+# Mova as credenciais para User Secrets (dev) ou variáveis de ambiente (prod):
+#
+#   dotnet user-secrets init --project FinanceSap.Api
+#   dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=...;Pwd=<senha>;"
+#
+# O arquivo appsettings.json deve conter apenas valores sem segredos (ex: Pwd=).
+# =============================================================================
+
+# User Secrets do .NET — armazenados fora do repositório por design
+# Caminho: %APPDATA%\Microsoft\UserSecrets\<guid>\secrets.json
+secrets.json
+
+# Configurações de ambiente local — podem conter overrides com credenciais reais
+appsettings.Local.json
+appsettings.local.json
+
+# appsettings.Development.json: ignorado por padrão pois desenvolvedores
+# frequentemente adicionam credenciais locais. Descomente se o seu arquivo
+# de desenvolvimento NÃO contiver segredos e precisar ser compartilhado.
+# appsettings.Development.json
+
+# Variáveis de ambiente locais (usado por dotenv e ferramentas similares)
+.env
+.env.*
+!.env.example
+
+
+# =============================================================================
+# [3] VISUAL STUDIO
+# =============================================================================
+
+# Diretório de configurações locais do VS (cache, breakpoints, layouts de janela)
+.vs/
+
+# Arquivos de configuração por usuário — contêm caminhos absolutos locais
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Arquivos temporários de build incremental
+*.aps
+*.ncb
+*.opendb
+*.opensdf
+*.sdf
+*.cachefile
+*.VC.db
+*.VC.VC.opendb
+
+# Relatórios de crash do VS
+[Ee]rror[Ll]og.xml
+[Dd]ebug[Ll]og.xml
+
+
+# =============================================================================
+# [4] VSCODE / OUTROS EDITORES
+# =============================================================================
+
+.vscode/
+!.vscode/extensions.json
+!.vscode/launch.json.example
+
+# JetBrains Rider
+.idea/
+*.sln.iml
+
+# Vim / Emacs
+*~
+*.swp
+*.swo
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+
+
+# =============================================================================
+# [5] TESTES E COBERTURA DE CÓDIGO
+# =============================================================================
+
+# Resultados de execução de testes
+TestResults/
+**/TestResults/
+*.trx
+*.coverage
+*.coveragexml
+
+# Relatórios de cobertura (coverlet, ReportGenerator)
+coverage/
+coverage-report/
+CoverageReport/
+lcov.info
+*.lcov
+
+# Arquivos de resultado gerados localmente (ex: resultado_testes.txt)
+resultado_testes.txt
+
+
+# =============================================================================
+# [6] NUGET
+# =============================================================================
+
+# Cache local de pacotes — restaurado via `dotnet restore`
+*.nupkg
+*.snupkg
+**/[Pp]ackages/
+!**/[Pp]ackages/build/
+nuget.config.local
+
+# Arquivos de lock gerados (manter packages.lock.json se usar locked mode)
+# packages.lock.json
+
+
+# =============================================================================
+# [7] PUBLISH / DEPLOY
+# =============================================================================
+
+# Saída de `dotnet publish`
+**/publish/
+**/PublishOutput/
+
+# Artefatos de release
+*.zip
+*.tar.gz
+*.nupkg
+
+
+# =============================================================================
+# [8] DOCKER
+# =============================================================================
+
+# Arquivo de override local do Docker Compose (credenciais, portas locais)
+# O docker-compose.yml base é versionado; overrides locais não.
+docker-compose.override.yml
+docker-compose.local.yml
+
+# Volumes Docker locais mapeados
+.docker/
+
+
+# =============================================================================
+# [9] ENTITY FRAMEWORK CORE
+# Migrations DEVEM ser versionadas — são o histórico do schema do banco.
+# Apenas arquivos temporários/locais são ignorados aqui.
+# =============================================================================
+
+# Snapshots temporários gerados por ferramentas (não confundir com Migrations/)
+*.efbackup
+
+# Banco SQLite local usado em testes ou desenvolvimento rápido
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+
+# =============================================================================
+# [10] SISTEMA OPERACIONAL
+# =============================================================================
+
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Linux
+*~
+
+
+# =============================================================================
+# [11] LOGS E DIAGNÓSTICO
+# =============================================================================
+
+# Arquivos de log gerados em runtime
+*.log
+logs/
+**/logs/
+
+# Dumps de memória e crash reports
+*.dmp
+*.mdmp
+*.hdmp
+
+
+# =============================================================================
+# [12] CERTIFICADOS E CHAVES  ⚠️  CRÍTICO
+# Nunca versionar chaves privadas, certificados ou qualquer material criptográfico.
+# =============================================================================
+
+*.pfx
+*.p12
+*.pem
+*.key
+*.cer
+*.crt
+# Exceção: certificados públicos de CA que precisam ser distribuídos
+# !ca-bundle.crt
+
+
+# =============================================================================
+# ARQUIVOS EXPLICITAMENTE VERSIONADOS (exceções às regras acima)
+# Use ! para forçar o rastreamento de arquivos que padrões acima ignorariam.
+# =============================================================================
+
+# Template de variáveis de ambiente — documenta quais variáveis são necessárias
+!.env.example
+
+# Configuração base da API (sem segredos — credenciais devem estar em User Secrets)
+!**/appsettings.json
+
+# Migrations do EF Core — histórico do schema, deve ser versionado
+!**/Migrations/
+
+# Docker Compose base (sem credenciais hardcoded em produção)
+!docker-compose.yml
