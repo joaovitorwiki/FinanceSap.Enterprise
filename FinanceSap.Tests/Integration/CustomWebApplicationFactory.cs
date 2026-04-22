@@ -13,10 +13,11 @@ namespace FinanceSap.Tests.Integration;
 public sealed class CustomWebApplicationFactory
     : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    // Connection string para o MySQL rodando no Docker.
-    // Em CI/CD, sobrescreva via variável de ambiente TEST_DB_CONNECTION.
-    private const string TestConnectionString =
-        "Server=localhost;Port=3306;Database=financesap_tests;Uid=root;Pwd=root;";
+    // Em CI/CD (GitHub Actions), a variável TEST_DB_CONNECTION é injetada via env: no workflow.
+    // Localmente, usa o fallback com localhost (Docker).
+    private static readonly string TestConnectionString =
+        Environment.GetEnvironmentVariable("TEST_DB_CONNECTION")
+        ?? "Server=localhost;Port=3306;Database=financesap_tests;Uid=root;Pwd=root;";
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {

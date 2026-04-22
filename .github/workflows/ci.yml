@@ -1,0 +1,166 @@
+name: FinanceSap CI
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Dispara em push ou pull_request para main/master.
+# ─────────────────────────────────────────────────────────────────────────────
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+# Cancela runs anteriores do mesmo PR para economizar minutos do GitHub Actions.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ───────────────────────────────────────────────────────────────────────────
+  # JOB 1 — Build + Unit Tests (sem banco de dados)
+  # Roda sempre. Rápido. Valida compilação e testes unitários (CpfTests, etc.)
+  # ───────────────────────────────────────────────────────────────────────────
+  build-and-unit-tests:
+    name: Build & Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      # Cache de pacotes NuGet — evita re-download a cada run.
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore dependencies
+        run: dotnet restore FinanceSap.Enterprise.sln
+
+      - name: Build (Release)
+        run: dotnet build FinanceSap.Enterprise.sln --configuration Release --no-restore
+
+      # Roda APENAS os testes unitários (ValueObjects/) — sem banco.
+      # O filtro ~Category=Integration exclui testes que precisam do MySQL.
+      - name: Run unit tests
+        run: |
+          dotnet test FinanceSap.Tests/FinanceSap.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --filter "FullyQualifiedName~ValueObjects" \
+            --logger "console;verbosity=normal" \
+            --collect:"XPlat Code Coverage" \
+            --results-directory ./coverage
+
+      # Publica o relatório de cobertura como artefato para download.
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: ./coverage
+          retention-days: 7
+
+  # ───────────────────────────────────────────────────────────────────────────
+  # JOB 2 — Integration Tests (com MySQL Service Container)
+  #
+  # ATENÇÃO: Este job sobe um container MySQL real no runner do GitHub Actions.
+  # Ele espelha exatamente o que o CustomWebApplicationFactory faz localmente.
+  #
+  # Se você NÃO quiser rodar testes de integração no CI agora, comente o job
+  # inteiro ou adicione: if: false
+  # ───────────────────────────────────────────────────────────────────────────
+  integration-tests:
+    name: Integration Tests (MySQL)
+    runs-on: ubuntu-latest
+    needs: build-and-unit-tests  # Só roda se o build passou.
+
+    # ── MySQL Service Container ──────────────────────────────────────────────
+    # O GitHub Actions sobe este container ANTES dos steps.
+    # A aplicação acessa via: Server=127.0.0.1;Port=3306
+    # (localhost não funciona em containers — use 127.0.0.1)
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: financesap_tests
+        ports:
+          - 3306:3306
+        # Aguarda o MySQL estar pronto antes de continuar.
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Restore dependencies
+        run: dotnet restore FinanceSap.Enterprise.sln
+
+      - name: Build (Release)
+        run: dotnet build FinanceSap.Enterprise.sln --configuration Release --no-restore
+
+      # Sobrescreve a connection string do CustomWebApplicationFactory
+      # via variável de ambiente — sem alterar código-fonte.
+      # O CustomWebApplicationFactory já lê: TEST_DB_CONNECTION (se configurado)
+      # ou usa o fallback hardcoded. Aqui garantimos o valor correto para CI.
+      - name: Run integration tests
+        env:
+          # ── IMPORTANTE ──────────────────────────────────────────────────────
+          # 127.0.0.1 em vez de localhost — obrigatório para Service Containers.
+          # Esta variável sobrescreve a connection string no CustomWebApplicationFactory.
+          # Se o seu factory ainda usa a string hardcoded, atualize para ler esta env var:
+          #
+          #   private static readonly string TestConnectionString =
+          #       Environment.GetEnvironmentVariable("TEST_DB_CONNECTION")
+          #       ?? "Server=localhost;Port=3306;Database=financesap_tests;Uid=root;Pwd=root;";
+          # ────────────────────────────────────────────────────────────────────
+          TEST_DB_CONNECTION: "Server=127.0.0.1;Port=3306;Database=financesap_tests;Uid=root;Pwd=root;"
+
+          # Segredos de JWT para a aplicação não quebrar ao inicializar no teste.
+          # Configure estes valores em: GitHub → Settings → Secrets → Actions
+          Jwt__Key: ${{ secrets.JWT_KEY }}
+          Jwt__Issuer: ${{ secrets.JWT_ISSUER }}
+          Jwt__Audience: ${{ secrets.JWT_AUDIENCE }}
+
+        run: |
+          dotnet test FinanceSap.Tests/FinanceSap.Tests.csproj \
+            --configuration Release \
+            --no-build \
+            --filter "FullyQualifiedName~Integration" \
+            --logger "console;verbosity=normal" \
+            --logger "trx;LogFileName=integration-results.trx" \
+            --results-directory ./test-results
+
+      # Publica o relatório .trx como artefato — visível na aba Actions do GitHub.
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: integration-test-results
+          path: ./test-results
+          retention-days: 7
