@@ -13,6 +13,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# ── GitHub Actions Permissions (Principle of Least Privilege) ────────────────
+# Concede apenas as permissões mínimas necessárias para o workflow funcionar.
+# Ref: https://docs.github.com/en/actions/security-guides/automatic-token-authentication
+permissions:
+  contents: read        # Ler código do repositório
+  checks: write         # Criar check runs (test-reporter)
+  pull-requests: write  # Comentar em PRs com resultados de testes
+  actions: read         # Ler metadados de workflows
+
 env:
   DOTNET_VERSION: '9.0.x'
   SOLUTION_PATH: 'FinanceSap.Enterprise.sln'
@@ -65,17 +74,40 @@ jobs:
             --filter "FullyQualifiedName~ValueObjects" \
             --logger "console;verbosity=normal" \
             --logger "trx;LogFileName=unit-tests.trx" \
+            --logger "html;LogFileName=unit-tests.html" \
             --collect:"XPlat Code Coverage" \
             --results-directory ./test-results/unit
 
-      - name: 📊 Publish unit test results
-        uses: dorny/test-reporter@v1
+      # ── Test Results Summary (Native GitHub Actions) ──────────────────────────
+      - name: 📊 Generate unit test summary
         if: always()
-        with:
-          name: Unit Test Results
-          path: './test-results/unit/*.trx'
-          reporter: dotnet-trx
-          fail-on-error: true
+        run: |
+          echo "## 🧪 Unit Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "./test-results/unit/unit-tests.trx" ]; then
+            TOTAL=$(grep -oP 'total="\K[0-9]+' ./test-results/unit/unit-tests.trx | head -1)
+            PASSED=$(grep -oP 'passed="\K[0-9]+' ./test-results/unit/unit-tests.trx | head -1)
+            FAILED=$(grep -oP 'failed="\K[0-9]+' ./test-results/unit/unit-tests.trx | head -1)
+            
+            echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Total  | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+            echo "| ✅ Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
+            echo "| ❌ Failed | $FAILED |" >> $GITHUB_STEP_SUMMARY
+            
+            if [ "$FAILED" -gt 0 ]; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### ❌ Test Failures" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              grep -A 10 'outcome="Failed"' ./test-results/unit/unit-tests.trx | head -100 >> $GITHUB_STEP_SUMMARY || echo "No detailed failure info"
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              exit 1
+            fi
+          else
+            echo "⚠️ No test results found" >> $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
 
       - name: 📤 Upload coverage report
         uses: actions/upload-artifact@v4
@@ -162,6 +194,8 @@ jobs:
 
       # ── Integration Tests with Full Environment Parity ────────────────────
       - name: 🧬 Run integration tests
+        id: integration-tests
+        continue-on-error: true
         env:
           # ── Environment Configuration ────────────────────────────────────
           ASPNETCORE_ENVIRONMENT: Testing
@@ -191,19 +225,8 @@ jobs:
             --logger "html;LogFileName=integration-tests.html" \
             --results-directory ./test-results/integration
 
-      # ── Test Results Publishing with Detailed Failure Analysis ────────────
-      - name: 📊 Publish integration test results
-        uses: dorny/test-reporter@v1
-        if: always()
-        with:
-          name: Integration Test Results
-          path: './test-results/integration/*.trx'
-          reporter: dotnet-trx
-          fail-on-error: true
-          max-annotations: 50
-
-      # ── GitHub Summary with Failure Details ───────────────────────────────
-      - name: 📝 Generate test summary
+      # ── Test Results Analysis (Native GitHub Summary) ─────────────────────────
+      - name: 📊 Analyze integration test results
         if: always()
         run: |
           echo "## 🧬 Integration Test Results" >> $GITHUB_STEP_SUMMARY
@@ -223,14 +246,21 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             
             if [ "$FAILED" -gt 0 ]; then
-              echo "### ❌ Failed Tests" >> $GITHUB_STEP_SUMMARY
+              echo "### ❌ Failed Tests Details" >> $GITHUB_STEP_SUMMARY
               echo '```' >> $GITHUB_STEP_SUMMARY
-              grep -A 5 'outcome="Failed"' ./test-results/integration/integration-tests.trx | head -50 >> $GITHUB_STEP_SUMMARY || echo "No detailed failure info available"
+              grep -B 2 -A 10 'outcome="Failed"' ./test-results/integration/integration-tests.trx | head -200 >> $GITHUB_STEP_SUMMARY || echo "No detailed failure info available"
               echo '```' >> $GITHUB_STEP_SUMMARY
             fi
           else
             echo "⚠️ No test results file found" >> $GITHUB_STEP_SUMMARY
           fi
+
+      # ── Fail the Job if Tests Failed ─────────────────────────────────────────
+      - name: ❌ Fail if tests failed
+        if: steps.integration-tests.outcome == 'failure'
+        run: |
+          echo "❌ Integration tests failed. Check the summary above for details."
+          exit 1
 
       # ── Artifact Upload for Post-Mortem Analysis ──────────────────────────
       - name: 📤 Upload test artifacts
