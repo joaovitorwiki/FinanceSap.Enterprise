@@ -10,7 +10,8 @@ public static class ApiServiceExtensions
 
     public static IServiceCollection AddApiSecurity(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IWebHostEnvironment environment)
     {
         services.AddRateLimiter(options =>
         {
@@ -27,11 +28,20 @@ public static class ApiServiceExtensions
                 );
             };
 
-            // Política Fixed Window por IP para o endpoint de clientes.
-            // Protege contra brute force e enumeração de CPFs.
+            // ── Environment-Based Rate Limiting ──────────────────────────────────────
+            // Development/Testing: limites relaxados para não bloquear testes.
+            // Production: limites estritos para proteção contra abuso.
+            var isDevelopmentOrTesting = environment.IsDevelopment() || 
+                                        environment.IsEnvironment("Testing");
+
             var section     = configuration.GetSection("RateLimiting:Customers");
-            var permitLimit = section.GetValue<int>("PermitLimit", 10);
-            var window      = TimeSpan.FromSeconds(section.GetValue<int>("WindowSeconds", 60));
+            var permitLimit = isDevelopmentOrTesting 
+                ? 1000  // Limite alto em dev/test — não bloqueia testes de integração
+                : section.GetValue<int>("PermitLimit", 10);
+            
+            var window = isDevelopmentOrTesting
+                ? TimeSpan.FromSeconds(1)  // Janela curta em dev/test
+                : TimeSpan.FromSeconds(section.GetValue<int>("WindowSeconds", 60));
 
             options.AddPolicy(CustomersRateLimitPolicy, httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(

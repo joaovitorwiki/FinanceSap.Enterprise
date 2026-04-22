@@ -14,7 +14,7 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
 // Rate Limiter + configurações de segurança da camada API.
-builder.Services.AddApiSecurity(builder.Configuration);
+builder.Services.AddApiSecurity(builder.Configuration, builder.Environment);
 
 // CORS registrado no container — política configurável por ambiente.
 // Em produção, substitua AllowAnyOrigin por origens explícitas.

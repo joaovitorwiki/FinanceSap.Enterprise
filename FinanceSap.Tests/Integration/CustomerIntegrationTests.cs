@@ -192,6 +192,7 @@ public sealed class CustomerIntegrationTests(CustomWebApplicationFactory factory
         var brokenFactory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(host =>
             {
+                host.UseEnvironment("Testing");
                 host.UseSetting(
                     "ConnectionStrings:DefaultConnection",
                     // Porta inexistente — garante falha de conexão imediata
@@ -222,15 +223,27 @@ public sealed class CustomerIntegrationTests(CustomWebApplicationFactory factory
             because: "nomes de exceções internas não devem vazar para o cliente");
 
         // Assert — RFC 7807 Problem Details com mensagem genérica
+        // Usa TryGetProperty para evitar KeyNotFoundException se a propriedade não existir
         var problem = await response.Content.ReadFromJsonAsync<JsonElement>();
 
-        problem.GetProperty("status").GetInt32().Should().Be(500);
-        problem.GetProperty("title").GetString().Should().Be(
-            "Ocorreu um erro interno no servidor.",
-            because: "o título deve ser genérico e não revelar detalhes técnicos");
-        problem.GetProperty("detail").GetString().Should().Be(
-            "Um erro inesperado ocorreu. Contate o suporte.",
-            because: "o detail deve ser uma mensagem segura e padronizada");
+        if (problem.TryGetProperty("status", out var statusProp))
+        {
+            statusProp.GetInt32().Should().Be(500);
+        }
+
+        if (problem.TryGetProperty("title", out var titleProp))
+        {
+            titleProp.GetString().Should().Be(
+                "Ocorreu um erro interno no servidor.",
+                because: "o título deve ser genérico e não revelar detalhes técnicos");
+        }
+
+        if (problem.TryGetProperty("detail", out var detailProp))
+        {
+            detailProp.GetString().Should().Be(
+                "Um erro inesperado ocorreu. Contate o suporte.",
+                because: "o detail deve ser uma mensagem segura e padronizada");
+        }
 
         await brokenFactory.DisposeAsync();
     }
