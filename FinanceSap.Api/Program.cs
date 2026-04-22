@@ -26,12 +26,14 @@ builder.Services.AddCors(options =>
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
 // A ORDEM É CRÍTICA para segurança:
-// 1. CORS         — negocia origens antes de qualquer processamento
-// 2. RateLimiter  — rejeita abuso o mais cedo possível, antes de tocar a aplicação
-// 3. SecHeaders   — aplica headers em TODAS as respostas, incluindo 429 e 500
-// 4. Exception    — captura qualquer exceção dos middlewares seguintes
-// 5. HTTPS        — redireciona antes de processar a rota
-// 6. Rotas        — processa a requisição legítima
+// 1. CORS            — negocia origens antes de qualquer processamento
+// 2. RateLimiter     — rejeita abuso o mais cedo possível
+// 3. SecHeaders      — aplica headers em TODAS as respostas
+// 4. Exception       — captura exceções dos middlewares seguintes
+// 5. HTTPS           — redireciona antes de processar a rota
+// 6. Authentication  — valida JWT
+// 7. Authorization   — valida permissões
+// 8. Rotas           — processa a requisição legítima
 
 var app = builder.Build();
 
@@ -47,6 +49,11 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Authentication/Authorization — APÓS HTTPS, ANTES de MapControllers.
+app.UseAuthentication();
+app.UseAuthorization();
+
 app.MapControllers();
 
 app.Run();
