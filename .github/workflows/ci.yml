@@ -80,12 +80,11 @@ jobs:
   integration-tests:
     name: Integration Tests (MySQL)
     runs-on: ubuntu-latest
-    needs: build-and-unit-tests  # Só roda se o build passou.
+    needs: build-and-unit-tests
 
     # ── MySQL Service Container ──────────────────────────────────────────────
-    # O GitHub Actions sobe este container ANTES dos steps.
-    # A aplicação acessa via: Server=127.0.0.1;Port=3306
-    # (localhost não funciona em containers — use 127.0.0.1)
+    # Sintaxe de array no health-cmd — evita problema de escape de aspas no YAML.
+    # O runner acessa o MySQL via 127.0.0.1 (localhost não resolve para containers).
     services:
       mysql:
         image: mysql:8.0
@@ -94,12 +93,12 @@ jobs:
           MYSQL_DATABASE: financesap_tests
         ports:
           - 3306:3306
-        # Aguarda o MySQL estar pronto antes de continuar.
         options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot"
+          --health-cmd="mysqladmin ping --silent -h 127.0.0.1 -uroot -proot"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
+          --health-start-period=30s
 
     steps:
       - name: Checkout
@@ -121,28 +120,43 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore FinanceSap.Enterprise.sln
 
+      # Build obrigatório neste job — cada job é uma VM nova e não herda
+      # binários do job anterior. --no-build causava FileNotFoundException.
       - name: Build (Release)
         run: dotnet build FinanceSap.Enterprise.sln --configuration Release --no-restore
 
-      # Sobrescreve a connection string do CustomWebApplicationFactory
-      # via variável de ambiente — sem alterar código-fonte.
-      # O CustomWebApplicationFactory já lê: TEST_DB_CONNECTION (se configurado)
-      # ou usa o fallback hardcoded. Aqui garantimos o valor correto para CI.
+      # Garante que o MySQL aceitou conexões antes de iniciar os testes.
+      # O health check do service container valida o processo, mas não garante
+      # que o usuário root já está pronto para aceitar conexões externas.
+      - name: Wait for MySQL to be ready
+        run: |
+          for i in $(seq 1 15); do
+            if mysqladmin ping -h 127.0.0.1 -uroot -proot --silent 2>/dev/null; then
+              echo "MySQL ready after $i attempts."
+              exit 0
+            fi
+            echo "Attempt $i/15 — waiting 2s..."
+            sleep 2
+          done
+          echo "MySQL did not become ready in time." && exit 1
+
       - name: Run integration tests
         env:
-          # ── IMPORTANTE ──────────────────────────────────────────────────────
-          # 127.0.0.1 em vez de localhost — obrigatório para Service Containers.
-          # Esta variável sobrescreve a connection string no CustomWebApplicationFactory.
-          # Se o seu factory ainda usa a string hardcoded, atualize para ler esta env var:
-          #
-          #   private static readonly string TestConnectionString =
-          #       Environment.GetEnvironmentVariable("TEST_DB_CONNECTION")
-          #       ?? "Server=localhost;Port=3306;Database=financesap_tests;Uid=root;Pwd=root;";
-          # ────────────────────────────────────────────────────────────────────
+          # 127.0.0.1 obrigatório — 'localhost' tenta socket Unix, não TCP,
+          # e falha dentro do runner do GitHub Actions.
           TEST_DB_CONNECTION: "Server=127.0.0.1;Port=3306;Database=financesap_tests;Uid=root;Pwd=root;"
 
-          # Segredos de JWT para a aplicação não quebrar ao inicializar no teste.
-          # Configure estes valores em: GitHub → Settings → Secrets → Actions
+          # Os nomes abaixo usam double underscore (__) — notação do .NET para
+          # hierarquia de configuração via variável de ambiente.
+          # Isso mapeia para: { "Jwt": { "Key": "..." } } no appsettings.
+          #
+          # ── AÇÃO NECESSÁRIA ─────────────────────────────────────────────────
+          # Confirme que seus GitHub Secrets têm EXATAMENTE estes nomes:
+          #   JWT_KEY      → valor: chave secreta com mínimo 32 caracteres
+          #   JWT_ISSUER   → valor: FinanceSap
+          #   JWT_AUDIENCE → valor: FinanceSap
+          # GitHub: Settings → Secrets and variables → Actions → New repository secret
+          # ────────────────────────────────────────────────────────────────────
           Jwt__Key: ${{ secrets.JWT_KEY }}
           Jwt__Issuer: ${{ secrets.JWT_ISSUER }}
           Jwt__Audience: ${{ secrets.JWT_AUDIENCE }}
@@ -150,13 +164,11 @@ jobs:
         run: |
           dotnet test FinanceSap.Tests/FinanceSap.Tests.csproj \
             --configuration Release \
-            --no-build \
             --filter "FullyQualifiedName~Integration" \
             --logger "console;verbosity=normal" \
             --logger "trx;LogFileName=integration-results.trx" \
             --results-directory ./test-results
 
-      # Publica o relatório .trx como artefato — visível na aba Actions do GitHub.
       - name: Upload test results
         uses: actions/upload-artifact@v4
         if: always()
