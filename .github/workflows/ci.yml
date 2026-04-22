@@ -1,178 +1,252 @@
-name: FinanceSap CI
+name: FinanceSap CI/CD Pipeline
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Dispara em push ou pull_request para main/master.
+# Enterprise-grade CI/CD pipeline with strict environment parity and observability.
 # ─────────────────────────────────────────────────────────────────────────────
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, develop ]
   pull_request:
     branches: [ main, master ]
 
-# Cancela runs anteriores do mesmo PR para economizar minutos do GitHub Actions.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  DOTNET_VERSION: '9.0.x'
+  SOLUTION_PATH: 'FinanceSap.Enterprise.sln'
+  TEST_PROJECT: 'FinanceSap.Tests/FinanceSap.Tests.csproj'
+
 jobs:
-  # ───────────────────────────────────────────────────────────────────────────
-  # JOB 1 — Build + Unit Tests (sem banco de dados)
-  # Roda sempre. Rápido. Valida compilação e testes unitários (CpfTests, etc.)
-  # ───────────────────────────────────────────────────────────────────────────
+  # ═══════════════════════════════════════════════════════════════════════════
+  # STAGE 1 — Build & Unit Tests (Fast Feedback Loop)
+  # ═══════════════════════════════════════════════════════════════════════════
   build-and-unit-tests:
-    name: Build & Unit Tests
+    name: 🔨 Build & Unit Tests
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - name: Checkout
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for better blame/analysis
 
-      - name: Setup .NET 9
+      - name: ⚙️ Setup .NET ${{ env.DOTNET_VERSION }}
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      # Cache de pacotes NuGet — evita re-download a cada run.
-      - name: Cache NuGet packages
+      - name: 📦 Cache NuGet packages
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: |
-            nuget-${{ runner.os }}-
+            ${{ runner.os }}-nuget-
 
-      - name: Restore dependencies
-        run: dotnet restore FinanceSap.Enterprise.sln
+      - name: 🔄 Restore dependencies
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
 
-      - name: Build (Release)
-        run: dotnet build FinanceSap.Enterprise.sln --configuration Release --no-restore
-
-      # Roda APENAS os testes unitários (ValueObjects/) — sem banco.
-      # O filtro ~Category=Integration exclui testes que precisam do MySQL.
-      - name: Run unit tests
+      - name: 🏗️ Build solution (Release)
         run: |
-          dotnet test FinanceSap.Tests/FinanceSap.Tests.csproj \
+          dotnet build ${{ env.SOLUTION_PATH }} \
+            --configuration Release \
+            --no-restore \
+            /p:TreatWarningsAsErrors=true \
+            /p:WarningLevel=4
+
+      - name: 🧪 Run unit tests
+        run: |
+          dotnet test ${{ env.TEST_PROJECT }} \
             --configuration Release \
             --no-build \
             --filter "FullyQualifiedName~ValueObjects" \
             --logger "console;verbosity=normal" \
+            --logger "trx;LogFileName=unit-tests.trx" \
             --collect:"XPlat Code Coverage" \
-            --results-directory ./coverage
+            --results-directory ./test-results/unit
 
-      # Publica o relatório de cobertura como artefato para download.
-      - name: Upload coverage report
+      - name: 📊 Publish unit test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Unit Test Results
+          path: './test-results/unit/*.trx'
+          reporter: dotnet-trx
+          fail-on-error: true
+
+      - name: 📤 Upload coverage report
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: coverage-report
-          path: ./coverage
+          name: unit-test-coverage
+          path: ./test-results/unit
           retention-days: 7
 
-  # ───────────────────────────────────────────────────────────────────────────
-  # JOB 2 — Integration Tests (com MySQL Service Container)
-  #
-  # ATENÇÃO: Este job sobe um container MySQL real no runner do GitHub Actions.
-  # Ele espelha exatamente o que o CustomWebApplicationFactory faz localmente.
-  #
-  # Se você NÃO quiser rodar testes de integração no CI agora, comente o job
-  # inteiro ou adicione: if: false
-  # ───────────────────────────────────────────────────────────────────────────
+  # ═══════════════════════════════════════════════════════════════════════════
+  # STAGE 2 — Integration Tests (Production-Grade Environment Parity)
+  # ═══════════════════════════════════════════════════════════════════════════
   integration-tests:
-    name: Integration Tests (MySQL)
+    name: 🧬 Integration Tests (MySQL)
     runs-on: ubuntu-latest
     needs: build-and-unit-tests
+    timeout-minutes: 15
 
-    # ── MySQL Service Container ──────────────────────────────────────────────
-    # Sintaxe de array no health-cmd — evita problema de escape de aspas no YAML.
-    # O runner acessa o MySQL via 127.0.0.1 (localhost não resolve para containers).
+    # ── Service Container: MySQL 8.0 with Native Docker Healthcheck ──────────
+    # The healthcheck MUST pass before any step runs — strict dependency.
+    # Uses mysqladmin ping with proper authentication and silent mode.
     services:
       mysql:
         image: mysql:8.0
         env:
           MYSQL_ROOT_PASSWORD: root
           MYSQL_DATABASE: financesap_tests
+          # Performance tuning for CI — faster startup
+          MYSQL_INITDB_SKIP_TZINFO: 1
         ports:
           - 3306:3306
+        # Native Docker healthcheck — GitHub Actions waits for 'healthy' status
         options: >-
-          --health-cmd="mysqladmin ping --silent -h 127.0.0.1 -uroot -proot"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=10
+          --name mysql-test-container
+          --health-cmd="mysqladmin ping --silent -h localhost -uroot -proot"
+          --health-interval=5s
+          --health-timeout=3s
+          --health-retries=20
           --health-start-period=30s
 
     steps:
-      - name: Checkout
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup .NET 9
+      - name: ⚙️ Setup .NET ${{ env.DOTNET_VERSION }}
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Cache NuGet packages
+      - name: 📦 Cache NuGet packages
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: |
-            nuget-${{ runner.os }}-
+            ${{ runner.os }}-nuget-
 
-      - name: Restore dependencies
-        run: dotnet restore FinanceSap.Enterprise.sln
+      - name: 🔄 Restore dependencies
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
 
-      # Build obrigatório neste job — cada job é uma VM nova e não herda
-      # binários do job anterior. --no-build causava FileNotFoundException.
-      - name: Build (Release)
-        run: dotnet build FinanceSap.Enterprise.sln --configuration Release --no-restore
-
-      # Garante que o MySQL aceitou conexões antes de iniciar os testes.
-      # O health check do service container valida o processo, mas não garante
-      # que o usuário root já está pronto para aceitar conexões externas.
-      - name: Wait for MySQL to be ready
+      - name: 🏗️ Build solution (Release)
         run: |
-          for i in $(seq 1 15); do
-            if mysqladmin ping -h 127.0.0.1 -uroot -proot --silent 2>/dev/null; then
-              echo "MySQL ready after $i attempts."
+          dotnet build ${{ env.SOLUTION_PATH }} \
+            --configuration Release \
+            --no-restore
+
+      # ── Explicit MySQL Readiness Verification ─────────────────────────────
+      # Double-checks that MySQL accepts TCP connections on 127.0.0.1:3306
+      # before running tests. Prevents race conditions.
+      - name: 🔍 Verify MySQL readiness
+        run: |
+          echo "Waiting for MySQL to accept connections..."
+          for i in {1..30}; do
+            if mysqladmin ping -h 127.0.0.1 -P 3306 -uroot -proot --silent 2>/dev/null; then
+              echo "✅ MySQL is ready (attempt $i/30)"
+              mysql -h 127.0.0.1 -P 3306 -uroot -proot -e "SELECT VERSION();"
               exit 0
             fi
-            echo "Attempt $i/15 — waiting 2s..."
+            echo "⏳ Attempt $i/30 — waiting 2s..."
             sleep 2
           done
-          echo "MySQL did not become ready in time." && exit 1
+          echo "❌ MySQL failed to become ready in 60 seconds"
+          exit 1
 
-      - name: Run integration tests
+      # ── Integration Tests with Full Environment Parity ────────────────────
+      - name: 🧬 Run integration tests
         env:
-          # 127.0.0.1 obrigatório — 'localhost' tenta socket Unix, não TCP,
-          # e falha dentro do runner do GitHub Actions.
-          TEST_DB_CONNECTION: "Server=127.0.0.1;Port=3306;Database=financesap_tests;Uid=root;Pwd=root;"
-
-          # Os nomes abaixo usam double underscore (__) — notação do .NET para
-          # hierarquia de configuração via variável de ambiente.
-          # Isso mapeia para: { "Jwt": { "Key": "..." } } no appsettings.
-          #
-          # ── AÇÃO NECESSÁRIA ─────────────────────────────────────────────────
-          # Confirme que seus GitHub Secrets têm EXATAMENTE estes nomes:
-          #   JWT_KEY      → valor: chave secreta com mínimo 32 caracteres
-          #   JWT_ISSUER   → valor: FinanceSap
-          #   JWT_AUDIENCE → valor: FinanceSap
-          # GitHub: Settings → Secrets and variables → Actions → New repository secret
-          # ────────────────────────────────────────────────────────────────────
+          # ── Environment Configuration ────────────────────────────────────
+          ASPNETCORE_ENVIRONMENT: Testing
+          
+          # ── Database Connection (127.0.0.1 for Service Containers) ──────
+          # localhost resolves to Unix socket — 127.0.0.1 forces TCP/IP
+          ConnectionStrings__DefaultConnection: "Server=127.0.0.1;Port=3306;Database=financesap_tests;Uid=root;Pwd=root;AllowPublicKeyRetrieval=true;"
+          
+          # ── JWT Configuration (Secret Masking via GitHub Secrets) ───────
+          # Double underscore (__) maps to nested JSON in appsettings:
+          # Jwt__Key → { "Jwt": { "Key": "..." } }
           Jwt__Key: ${{ secrets.JWT_KEY }}
-          Jwt__Issuer: ${{ secrets.JWT_ISSUER }}
-          Jwt__Audience: ${{ secrets.JWT_AUDIENCE }}
+          Jwt__Issuer: ${{ secrets.JWT_ISSUER || 'FinanceSap' }}
+          Jwt__Audience: ${{ secrets.JWT_AUDIENCE || 'FinanceSap' }}
+          
+          # ── Logging Configuration ────────────────────────────────────────
+          Logging__LogLevel__Default: Warning
+          Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: Warning
 
         run: |
-          dotnet test FinanceSap.Tests/FinanceSap.Tests.csproj \
+          dotnet test ${{ env.TEST_PROJECT }} \
             --configuration Release \
+            --no-build \
             --filter "FullyQualifiedName~Integration" \
-            --logger "console;verbosity=normal" \
-            --logger "trx;LogFileName=integration-results.trx" \
-            --results-directory ./test-results
+            --logger "console;verbosity=detailed" \
+            --logger "trx;LogFileName=integration-tests.trx" \
+            --logger "html;LogFileName=integration-tests.html" \
+            --results-directory ./test-results/integration
 
-      - name: Upload test results
+      # ── Test Results Publishing with Detailed Failure Analysis ────────────
+      - name: 📊 Publish integration test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Integration Test Results
+          path: './test-results/integration/*.trx'
+          reporter: dotnet-trx
+          fail-on-error: true
+          max-annotations: 50
+
+      # ── GitHub Summary with Failure Details ───────────────────────────────
+      - name: 📝 Generate test summary
+        if: always()
+        run: |
+          echo "## 🧬 Integration Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "./test-results/integration/integration-tests.trx" ]; then
+            # Extract test counts from TRX
+            TOTAL=$(grep -oP 'total="\K[0-9]+' ./test-results/integration/integration-tests.trx | head -1)
+            PASSED=$(grep -oP 'passed="\K[0-9]+' ./test-results/integration/integration-tests.trx | head -1)
+            FAILED=$(grep -oP 'failed="\K[0-9]+' ./test-results/integration/integration-tests.trx | head -1)
+            
+            echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
+            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Total  | $TOTAL |" >> $GITHUB_STEP_SUMMARY
+            echo "| ✅ Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
+            echo "| ❌ Failed | $FAILED |" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            if [ "$FAILED" -gt 0 ]; then
+              echo "### ❌ Failed Tests" >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
+              grep -A 5 'outcome="Failed"' ./test-results/integration/integration-tests.trx | head -50 >> $GITHUB_STEP_SUMMARY || echo "No detailed failure info available"
+              echo '```' >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "⚠️ No test results file found" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # ── Artifact Upload for Post-Mortem Analysis ──────────────────────────
+      - name: 📤 Upload test artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: integration-test-results
-          path: ./test-results
-          retention-days: 7
+          path: |
+            ./test-results/integration/**/*
+          retention-days: 30  # Extended retention for compliance
+
+      # ── MySQL Logs on Failure (Debugging Aid) ─────────────────────────────
+      - name: 📋 Dump MySQL logs on failure
+        if: failure()
+        run: |
+          echo "## 🔍 MySQL Container Logs" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          docker logs mysql-test-container 2>&1 | tail -100 >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
