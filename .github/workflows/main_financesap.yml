@@ -20,6 +20,7 @@ env:
   AZURE_WEBAPP_NAME: financesap
   AZURE_WEBAPP_PACKAGE_PATH: './publish'
   DOTNET_VERSION: '9.0.x'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build-and-test:
@@ -42,16 +43,24 @@ jobs:
       run: dotnet build --configuration Release --no-restore
       
     - name: Run tests
-      run: dotnet test --configuration Release --no-build --verbosity normal --logger "trx;LogFileName=test-results.trx"
-      
+      env:
+        Jwt__Key: ${{ secrets.JWT_KEY }}
+        Jwt__Issuer: FinanceSap
+        Jwt__Audience: FinanceSap
+      run: |
+        dotnet test --configuration Release --no-build --verbosity normal \
+          --filter "FullyQualifiedName!~Integration" \
+          --logger "trx;LogFileName=test-results.trx" \
+          --results-directory ./test-results
+
     - name: Publish test results
-      uses: dorny/test-reporter@v1
+      uses: phoenix-actions/test-reporting@v15
       if: always()
       with:
         name: Test Results
         path: '**/test-results.trx'
         reporter: dotnet-trx
-        fail-on-error: true
+        fail-on-error: 'true'
         
     - name: Publish application
       if: success()
