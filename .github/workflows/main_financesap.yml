@@ -9,6 +9,13 @@ on:
       - main
   workflow_dispatch:
 
+# ── GitHub Actions Permissions (Principle of Least Privilege) ────────────────
+permissions:
+  contents: read        # Ler código do repositório
+  checks: write         # Criar check runs (dorny/test-reporter)
+  pull-requests: write  # Comentar em PRs com resultados de testes
+  id-token: write       # Necessário para OIDC authentication com Azure
+
 env:
   AZURE_WEBAPP_NAME: financesap
   AZURE_WEBAPP_PACKAGE_PATH: './publish'
