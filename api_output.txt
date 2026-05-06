@@ -1,0 +1,18 @@
+Usando as configurações de inicialização de FinanceSap.Api\Properties\launchSettings.json...
+Compilando...
+c:\Users\WikiO\FinanceSap.Enterprise\FinanceSap.Api\FinanceSap.Api.csproj : warning NU1603: FinanceSap.Api depende de Scalar.AspNetCore (>= 1.3.18) mas Scalar.AspNetCore 1.3.18 não foi encontrado. Scalar.AspNetCore 2.0.0 foi resolvido.
+c:\Users\WikiO\FinanceSap.Enterprise\FinanceSap.Api\FinanceSap.Api.csproj : warning NU1603: FinanceSap.Api depende de Scalar.AspNetCore (>= 1.3.18) mas Scalar.AspNetCore 1.3.18 não foi encontrado. Scalar.AspNetCore 2.0.0 foi resolvido.
+info: Microsoft.EntityFrameworkCore.Migrations[20411]
+      Acquiring an exclusive lock for migration application. See https://aka.ms/efcore-docs-migrations-lock for more information if this takes too long.
+info: Microsoft.EntityFrameworkCore.Migrations[20405]
+      No migrations were applied. The database is already up to date.
+info: FinanceSap.Api[0]
+      ✅ SQLite database initialized successfully
+info: Microsoft.Hosting.Lifetime[14]
+      Now listening on: http://localhost:5153
+info: Microsoft.Hosting.Lifetime[0]
+      Application started. Press Ctrl+C to shut down.
+info: Microsoft.Hosting.Lifetime[0]
+      Hosting environment: Development
+info: Microsoft.Hosting.Lifetime[0]
+      Content root path: c:\Users\WikiO\FinanceSap.Enterprise\FinanceSap.Api

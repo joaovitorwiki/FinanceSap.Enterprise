@@ -2,9 +2,19 @@ using FinanceSap.Api.Extensions;
 using FinanceSap.Api.Middlewares;
 using FinanceSap.Application;
 using FinanceSap.Infrastructure;
+using FinanceSap.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ── SQLite Environment Variable Override ─────────────────────────────────────
+// Prioriza SQLITE_CONNECTION_STRING do ambiente sobre appsettings.json
+var sqliteConnectionString = Environment.GetEnvironmentVariable("SQLITE_CONNECTION_STRING");
+if (!string.IsNullOrWhiteSpace(sqliteConnectionString))
+{
+    builder.Configuration["ConnectionStrings:DefaultConnection"] = sqliteConnectionString;
+}
 
 // ── Serviços ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +46,23 @@ builder.Services.AddCors(options =>
 // 8. Rotas           — processa a requisição legítima
 
 var app = builder.Build();
+
+// ── Auto-create SQLite Database ──────────────────────────────────────────────
+// Garante que o banco de dados SQLite seja criado automaticamente na inicialização
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    try
+    {
+        dbContext.Database.Migrate();
+        app.Logger.LogInformation("✅ SQLite database initialized successfully");
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "❌ Error initializing SQLite database");
+        if (!app.Environment.IsEnvironment("Testing")) throw;
+    }
+}
 
 app.UseCors();
 app.UseRateLimiter();

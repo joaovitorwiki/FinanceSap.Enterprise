@@ -195,8 +195,8 @@ public sealed class CustomerIntegrationTests(CustomWebApplicationFactory factory
                 host.UseEnvironment("Testing");
                 host.UseSetting(
                     "ConnectionStrings:DefaultConnection",
-                    // Porta inexistente — garante falha de conexão imediata
-                    "Server=localhost;Port=19999;Database=financesap_tests;Uid=root;Pwd=root;"
+                    // Caminho inválido — garante falha de acesso ao arquivo
+                    "Data Source=Z:\\invalid\\path\\financesap_broken.db"
                 );
             });
 

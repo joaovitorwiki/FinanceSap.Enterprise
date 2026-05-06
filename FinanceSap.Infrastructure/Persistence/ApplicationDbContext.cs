@@ -14,6 +14,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<LoanApplication> LoanApplications => Set<LoanApplication>();
     public DbSet<Customer>        Customers         => Set<Customer>();
     public DbSet<Account>         Accounts          => Set<Account>();
+    public DbSet<Loan>            Loans             => Set<Loan>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

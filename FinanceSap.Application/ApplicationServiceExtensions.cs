@@ -1,6 +1,7 @@
 using FinanceSap.Application.Behaviors;
 using FinanceSap.Application.UseCases.CreateCustomer;
 using FinanceSap.Application.UseCases.CreateLoanApplication;
+using FinanceSap.Application.UseCases.RequestLoan;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -13,6 +14,7 @@ public static class ApplicationServiceExtensions
         // Handlers legados (pré-MediatR) — manter compatibilidade.
         services.AddScoped<CreateCustomerHandler>();
         services.AddScoped<CreateLoanApplicationUseCase>();
+        services.AddScoped<RequestLoanHandler>();
 
         // MediatR — registra todos os IRequestHandler e INotificationHandler da assembly.
         services.AddMediatR(cfg =>

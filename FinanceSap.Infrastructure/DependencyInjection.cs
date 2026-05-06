@@ -9,6 +9,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.Extensions.Hosting;
 
 namespace FinanceSap.Infrastructure;
 
@@ -18,15 +19,16 @@ public static class DependencyInjection
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var connectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? throw new InvalidOperationException(
-                "Connection string 'DefaultConnection' não encontrada em appsettings.");
+        // Priority: Environment Variable > appsettings.json
+        // SQLite connection string (local file or in-memory for testing)
+        var connectionString = Environment.GetEnvironmentVariable("SQLITE_CONNECTION_STRING")
+            ?? configuration.GetConnectionString("DefaultConnection")
+            ?? "Data Source=financesap.db";
 
         services.AddDbContext<ApplicationDbContext>(options =>
-            options.UseMySql(
+            options.UseSqlite(
                 connectionString,
-                ServerVersion.AutoDetect(connectionString),
-                mysql => mysql.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)
+                sqlite => sqlite.MigrationsAssembly(typeof(ApplicationDbContext).Assembly.FullName)
             )
         );
 
@@ -82,6 +84,7 @@ public static class DependencyInjection
         services.AddScoped<ILoanApplicationRepository, LoanApplicationRepository>();
         services.AddScoped<ICustomerRepository, CustomerRepository>();
         services.AddScoped<IAccountRepository, AccountRepository>();
+        services.AddScoped<ILoanRepository, LoanRepository>();
         services.AddScoped<IUnitOfWork, UnitOfWork>();
         
         // User Context — abstração para acesso ao usuário autenticado.

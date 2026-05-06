@@ -3,7 +3,6 @@ using System;
 using FinanceSap.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -16,16 +15,12 @@ namespace FinanceSap.Infrastructure.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.0")
-                .HasAnnotation("Relational:MaxIdentifierLength", 64);
-
-            MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
+            modelBuilder.HasAnnotation("ProductVersion", "9.0.0");
 
             modelBuilder.Entity("FinanceSap.Domain.Entities.Account", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("char(36)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("AccountNumber")
                         .IsRequired()
@@ -36,10 +31,10 @@ namespace FinanceSap.Infrastructure.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid>("CustomerId")
-                        .HasColumnType("char(36)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -57,7 +52,7 @@ namespace FinanceSap.Infrastructure.Migrations
             modelBuilder.Entity("FinanceSap.Domain.Entities.Customer", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("char(36)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Document")
                         .IsRequired()
@@ -80,26 +75,80 @@ namespace FinanceSap.Infrastructure.Migrations
                     b.ToTable("customers", (string)null);
                 });
 
+            modelBuilder.Entity("FinanceSap.Domain.Entities.Loan", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CustomerId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("customer_id");
+
+                    b.Property<int>("Installments")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("installments");
+
+                    b.Property<decimal>("InterestRate")
+                        .HasColumnType("DECIMAL(5,2)")
+                        .HasColumnName("interest_rate");
+
+                    b.Property<decimal>("MonthlyPaymentAmount")
+                        .HasColumnType("DECIMAL(18,2)")
+                        .HasColumnName("monthly_payment_amount");
+
+                    b.Property<decimal>("PrincipalAmount")
+                        .HasColumnType("DECIMAL(18,2)")
+                        .HasColumnName("principal_amount");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("VARCHAR(20)")
+                        .HasColumnName("status");
+
+                    b.Property<decimal>("TotalToPay")
+                        .HasColumnType("DECIMAL(18,2)")
+                        .HasColumnName("total_to_pay");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("updated_at");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerId")
+                        .HasDatabaseName("IX_loans_customer_id");
+
+                    b.HasIndex("Status")
+                        .HasDatabaseName("IX_loans_status");
+
+                    b.ToTable("loans", (string)null);
+                });
+
             modelBuilder.Entity("FinanceSap.Domain.Entities.LoanApplication", b =>
                 {
                     b.Property<Guid>("Id")
-                        .HasColumnType("char(36)");
+                        .HasColumnType("TEXT");
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid>("CustomerId")
-                        .HasColumnType("char(36)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Status")
                         .IsRequired()
-                        .HasColumnType("longtext");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("TermInMonths")
-                        .HasColumnType("int");
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -112,57 +161,57 @@ namespace FinanceSap.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("char(36)");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("AccessFailedCount")
-                        .HasColumnType("int");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
-                        .HasColumnType("longtext");
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid?>("CustomerId")
-                        .HasColumnType("char(36)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Email")
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("EmailConfirmed")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("INTEGER");
 
                     b.Property<bool>("LockoutEnabled")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("INTEGER");
 
                     b.Property<DateTimeOffset?>("LockoutEnd")
-                        .HasColumnType("datetime(6)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("NormalizedUserName")
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("PasswordHash")
-                        .HasColumnType("longtext");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("PhoneNumber")
-                        .HasColumnType("longtext");
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("PhoneNumberConfirmed")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("SecurityStamp")
-                        .HasColumnType("longtext");
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("TwoFactorEnabled")
-                        .HasColumnType("tinyint(1)");
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("UserName")
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -180,19 +229,19 @@ namespace FinanceSap.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("char(36)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ConcurrencyStamp")
                         .IsConcurrencyToken()
-                        .HasColumnType("longtext");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("NormalizedName")
                         .HasMaxLength(256)
-                        .HasColumnType("varchar(256)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -207,18 +256,16 @@ namespace FinanceSap.Infrastructure.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ClaimType")
-                        .HasColumnType("longtext");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ClaimValue")
-                        .HasColumnType("longtext");
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid>("RoleId")
-                        .HasColumnType("char(36)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -231,18 +278,16 @@ namespace FinanceSap.Infrastructure.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ClaimType")
-                        .HasColumnType("longtext");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ClaimValue")
-                        .HasColumnType("longtext");
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("char(36)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
@@ -254,16 +299,16 @@ namespace FinanceSap.Infrastructure.Migrations
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserLogin<System.Guid>", b =>
                 {
                     b.Property<string>("LoginProvider")
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ProviderKey")
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("ProviderDisplayName")
-                        .HasColumnType("longtext");
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid>("UserId")
-                        .HasColumnType("char(36)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("LoginProvider", "ProviderKey");
 
@@ -275,10 +320,10 @@ namespace FinanceSap.Infrastructure.Migrations
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserRole<System.Guid>", b =>
                 {
                     b.Property<Guid>("UserId")
-                        .HasColumnType("char(36)");
+                        .HasColumnType("TEXT");
 
                     b.Property<Guid>("RoleId")
-                        .HasColumnType("char(36)");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("UserId", "RoleId");
 
@@ -290,16 +335,16 @@ namespace FinanceSap.Infrastructure.Migrations
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityUserToken<System.Guid>", b =>
                 {
                     b.Property<Guid>("UserId")
-                        .HasColumnType("char(36)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("LoginProvider")
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
-                        .HasColumnType("varchar(255)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Value")
-                        .HasColumnType("longtext");
+                        .HasColumnType("TEXT");
 
                     b.HasKey("UserId", "LoginProvider", "Name");
 
@@ -312,6 +357,17 @@ namespace FinanceSap.Infrastructure.Migrations
                         .WithOne()
                         .HasForeignKey("FinanceSap.Domain.Entities.Account", "CustomerId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Customer");
+                });
+
+            modelBuilder.Entity("FinanceSap.Domain.Entities.Loan", b =>
+                {
+                    b.HasOne("FinanceSap.Domain.Entities.Customer", "Customer")
+                        .WithMany()
+                        .HasForeignKey("CustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Customer");
