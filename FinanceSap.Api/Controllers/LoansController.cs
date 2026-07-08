@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace FinanceSap.Api.Controllers;
 
 [ApiController]
+[Consumes("application/json")]
 [Route("api/[controller]")]
 public sealed class LoansController(RequestLoanHandler handler) : ControllerBase
 {

@@ -26,12 +26,15 @@ public sealed class GlobalExceptionMiddleware(
             // Log estruturado completo para auditoria interna.
             // O correlationId permite rastrear o erro sem expô-lo ao cliente.
             var correlationId = context.TraceIdentifier;
+            // Sanitiza Path e Method para evitar Log Injection (CWE-117).
+            var safePath   = context.Request.Path.Value?.Replace("\n", "").Replace("\r", "") ?? "unknown";
+            var safeMethod = context.Request.Method.Replace("\n", "").Replace("\r", "");
             logger.LogError(
                 ex,
                 "Exceção não tratada. CorrelationId={CorrelationId} Path={Path} Method={Method}",
                 correlationId,
-                context.Request.Path,
-                context.Request.Method
+                safePath,
+                safeMethod
             );
 
             await WriteErrorAsync(context);

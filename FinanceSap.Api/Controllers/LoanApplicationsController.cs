@@ -6,6 +6,7 @@ namespace FinanceSap.Api.Controllers;
 // Controller REST para o módulo de solicitações de empréstimo.
 // Delega toda a lógica ao Use Case — sem regras de negócio no controller.
 [ApiController]
+[Consumes("application/json")]
 [Route("api/[controller]")]
 public sealed class LoanApplicationsController(CreateLoanApplicationUseCase useCase) : ControllerBase
 {

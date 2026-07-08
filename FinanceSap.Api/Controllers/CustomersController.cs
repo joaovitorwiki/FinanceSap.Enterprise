@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.RateLimiting;
 namespace FinanceSap.Api.Controllers;
 
 [ApiController]
+[Consumes("application/json")]
 [Route("api/[controller]")]
 public sealed class CustomersController(CreateCustomerHandler handler) : ControllerBase
 {

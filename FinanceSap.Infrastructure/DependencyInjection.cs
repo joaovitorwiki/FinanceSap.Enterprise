@@ -74,7 +74,9 @@ public static class DependencyInjection
                 ValidIssuer              = jwtIssuer,
                 ValidAudience            = jwtAudience,
                 IssuerSigningKey         = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
-                ClockSkew                = TimeSpan.Zero // Remove tolerância padrão de 5 min.
+                ClockSkew                = TimeSpan.Zero, // Remove tolerância padrão de 5 min.
+                // Bloqueia 'alg:none' e qualquer algoritmo fora da lista permitida.
+                ValidAlgorithms          = [SecurityAlgorithms.HmacSha256]
             };
         });
 
