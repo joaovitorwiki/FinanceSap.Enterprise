@@ -1,14 +1,19 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using FinanceSap.Application.Queries;
 using FinanceSap.Application.UseCases.CreateLoanApplication;
+using MediatR;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace FinanceSap.Api.Controllers;
 
-// Controller REST para o módulo de solicitações de empréstimo.
-// Delega toda a lógica ao Use Case — sem regras de negócio no controller.
 [ApiController]
 [Consumes("application/json")]
 [Route("api/[controller]")]
-public sealed class LoanApplicationsController(CreateLoanApplicationUseCase useCase) : ControllerBase
+public sealed class LoanApplicationsController(
+    CreateLoanApplicationUseCase useCase,
+    IMediator mediator) : ControllerBase
 {
     [HttpPost]
     [ProducesResponseType(typeof(CreateLoanApplicationResponse), StatusCodes.Status201Created)]
@@ -31,11 +36,23 @@ public sealed class LoanApplicationsController(CreateLoanApplicationUseCase useC
     }
 
     [HttpGet("{id:guid}")]
+    [Authorize]
     [ProducesResponseType(typeof(CreateLoanApplicationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public IActionResult GetById(Guid id)
+    public async Task<IActionResult> GetById(Guid id, CancellationToken ct)
     {
-        // Placeholder para o Use Case de consulta — extensível sem quebrar o contrato.
-        return NotFound();
+        var userId = GetUserId();
+        if (userId is null) return Unauthorized();
+
+        var application = await mediator.Send(new GetLoanApplicationByIdQuery(id, userId.Value), ct);
+        return application is null ? NotFound() : Ok(application);
+    }
+
+    private Guid? GetUserId()
+    {
+        var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                 ?? User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+        return Guid.TryParse(claim, out var id) ? id : null;
     }
 }

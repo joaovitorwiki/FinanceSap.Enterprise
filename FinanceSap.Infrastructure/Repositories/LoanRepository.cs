@@ -14,4 +14,8 @@ public sealed class LoanRepository(ApplicationDbContext context) : ILoanReposito
         => await context.Loans
                         .AsNoTracking()
                         .FirstOrDefaultAsync(x => x.Id == id, ct);
+
+    public async Task<Loan?> GetByIdTrackedAsync(Guid id, CancellationToken ct = default)
+        => await context.Loans
+                        .FirstOrDefaultAsync(x => x.Id == id, ct);
 }
