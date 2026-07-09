@@ -245,3 +245,4 @@ logs/
 
 # Docker Compose base (sem credenciais hardcoded em produção)
 !docker-compose.yml
+SECURITY_AUDIT.md
