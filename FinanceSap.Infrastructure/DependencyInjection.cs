@@ -54,7 +54,12 @@ public static class DependencyInjection
         .AddDefaultTokenProviders();
 
         // JWT Authentication — tokens de curta duração (15 min).
-        var jwtKey    = configuration["Jwt:Key"] ?? throw new InvalidOperationException("Jwt:Key não configurada.");
+        var jwtKey = configuration["Jwt:Secret"];
+
+        if (string.IsNullOrEmpty(jwtKey))
+        {
+            throw new InvalidOperationException("Jwt:Secret está faltando ou vazio na configuração do aplicativo (appsettings.json ou variáveis de ambiente).");
+        }
         var jwtIssuer = configuration["Jwt:Issuer"] ?? "FinanceSap";
         var jwtAudience = configuration["Jwt:Audience"] ?? "FinanceSap";
 

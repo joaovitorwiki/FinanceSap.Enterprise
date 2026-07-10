@@ -38,7 +38,7 @@ public sealed class SecurityHeadersMiddleware(RequestDelegate next)
                 "default-src 'self'; " +
                 "script-src 'self' 'unsafe-inline' 'unsafe-eval' cdn.jsdelivr.net unpkg.com; " +
                 "style-src 'self' 'unsafe-inline' cdn.jsdelivr.net fonts.googleapis.com; " +
-                "font-src 'self' fonts.gstatic.com cdn.jsdelivr.net; " +
+                "font-src 'self' fonts.gstatic.com cdn.jsdelivr.net fonts.scalar.com; " +
                 "img-src 'self' data: cdn.jsdelivr.net; " +
                 "connect-src 'self'";
 
