@@ -149,10 +149,7 @@ public sealed class Loan : BaseEntity
 
         Status = LoanStatus.Approved;
         MarkAsUpdated();
-
-        // Evento de aprovação pode ser adicionado aqui no futuro
-        // AddDomainEvent(new LoanApprovedEvent(Id, CustomerId));
-
+        AddDomainEvent(new LoanApprovedEvent(Id, CustomerId, PrincipalAmount));
         return Result.Success();
     }
 

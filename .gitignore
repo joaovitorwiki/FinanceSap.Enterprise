@@ -246,3 +246,8 @@ logs/
 # Docker Compose base (sem credenciais hardcoded em produção)
 !docker-compose.yml
 SECURITY_AUDIT.md
+SECURITY_AUDIT.md
+texto-secreto.txt
+api_output.txt
+texto-secreto.txt
+resultado_testes.txt

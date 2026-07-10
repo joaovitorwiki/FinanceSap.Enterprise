@@ -1,29 +1,29 @@
-# SecurityHeadersMiddleware — Refatoração para Suporte ao Scalar
+# SecurityHeadersMiddleware — Refactoring for Scalar Support
 
-## Problema Identificado
+## Identified Problem
 
-O `SecurityHeadersMiddleware` estava aplicando uma Content-Security-Policy (CSP) extremamente restritiva em **todas** as respostas:
+The `SecurityHeadersMiddleware` was applying an extremely restrictive Content-Security-Policy (CSP) to **all** responses:
 
 ```csharp
 headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
 ```
 
-Essa política bloqueia:
-- Scripts inline (`'unsafe-inline'`)
-- Eval dinâmico (`'unsafe-eval'`)
-- CDNs externos (cdn.jsdelivr.net, unpkg.com)
+This policy blocks:
+- Inline scripts (`'unsafe-inline'`)
+- Dynamic eval (`'unsafe-eval'`)
+- External CDNs (cdn.jsdelivr.net, unpkg.com)
 
-O Scalar precisa dessas permissões para renderizar a interface de documentação interativa, resultando em **tela branca**.
+Scalar requires these permissions to render the interactive documentation interface, resulting in a **blank screen**.
 
 ---
 
-## Solução Implementada
+## Implemented Solution
 
-### 1. Detecção de Endpoints de Documentação
+### 1. Documentation Endpoint Detection
 
-O middleware agora detecta requisições para:
-- `/openapi/*` — especificação OpenAPI JSON/YAML
-- `/scalar/*` — interface Scalar
+The middleware now detects requests for:
+- `/openapi/*` — OpenAPI JSON/YAML specification
+- `/scalar/*` — Scalar interface
 
 ```csharp
 private static readonly string[] DocumentationPaths =
@@ -36,9 +36,9 @@ var path = context.Request.Path.Value?.ToLowerInvariant() ?? string.Empty;
 var isDocumentation = DocumentationPaths.Any(docPath => path.StartsWith(docPath));
 ```
 
-### 2. CSP Diferenciada por Contexto
+### 2. Context-Specific CSP
 
-**Para Documentação (Scalar/OpenAPI):**
+**For Documentation (Scalar/OpenAPI):**
 ```csharp
 headers["Content-Security-Policy"] =
     "default-src 'self'; " +
@@ -51,13 +51,13 @@ headers["Content-Security-Policy"] =
 headers["X-Frame-Options"] = "SAMEORIGIN";
 ```
 
-**Para API JSON (endpoints normais):**
+**For JSON API (normal endpoints):**
 ```csharp
 headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'";
 headers["X-Frame-Options"] = "DENY";
 ```
 
-### 3. Headers Comuns (Aplicados em TODAS as Respostas)
+### 3. Common Headers (Applied to ALL Responses)
 
 ```csharp
 headers["X-Content-Type-Options"] = "nosniff";
@@ -73,86 +73,86 @@ headers.Remove("X-AspNetMvc-Version");
 
 ---
 
-## Alterações no Program.cs
+## Changes in Program.cs
 
-**Antes:**
+**Before:**
 ```csharp
-//app.UseMiddleware<SecurityHeadersMiddleware>(); // Comentado
+//app.UseMiddleware<SecurityHeadersMiddleware>(); // Commented out
 ```
 
-**Depois:**
+**After:**
 ```csharp
-app.UseMiddleware<SecurityHeadersMiddleware>(); // Ativo
+app.UseMiddleware<SecurityHeadersMiddleware>(); // Active
 ```
 
-O middleware agora está **sempre ativo**, mas aplica políticas diferentes conforme o contexto.
+The middleware is now **always active**, but applies different policies based on context.
 
 ---
 
-## Justificativa de Segurança
+## Security Justification
 
-### Por que relaxar a CSP para documentação?
+### Why relax CSP for documentation?
 
-1. **Isolamento de Superfície de Ataque**
-   - Documentação é acessada apenas em **Development** (`if (app.Environment.IsDevelopment())`)
-   - Em produção, os endpoints `/openapi` e `/scalar` **não são mapeados**
-   - Não há risco de XSS em produção porque a documentação não existe
+1. **Attack Surface Isolation**
+   - Documentation is only accessed in **Development** (`if (app.Environment.IsDevelopment())`)
+   - In production, `/openapi` and `/scalar` endpoints are **not mapped**
+   - There is no XSS risk in production because documentation does not exist
 
-2. **Princípio do Menor Privilégio**
-   - API JSON: CSP máxima (`default-src 'none'`)
-   - Documentação: CSP mínima necessária para funcionar
+2. **Principle of Least Privilege**
+   - JSON API: Maximum CSP (`default-src 'none'`)
+   - Documentation: Minimum CSP required to function
 
 3. **Defense in Depth**
-   - Mesmo com CSP relaxada, outros headers continuam ativos:
+   - Even with relaxed CSP, other headers remain active:
      - `X-Content-Type-Options: nosniff`
      - `Referrer-Policy: no-referrer`
-     - Remoção de headers de fingerprinting
+     - Removal of fingerprinting headers
 
-### Por que `'unsafe-inline'` e `'unsafe-eval'` são aceitáveis aqui?
+### Why are `'unsafe-inline'` and `'unsafe-eval'` acceptable here?
 
-- Scalar é uma biblioteca **confiável** (mantida pela comunidade OpenAPI)
-- A documentação **não processa dados do usuário**
-- O risco de XSS é **zero** porque não há input externo
-- A alternativa seria desabilitar completamente o middleware em Development, o que seria **pior** (sem proteção nenhuma)
+- Scalar is a **trusted** library (maintained by the OpenAPI community)
+- The documentation **does not process user data**
+- The XSS risk is **zero** because there is no external input
+- The alternative would be to completely disable the middleware in Development, which would be **worse** (no protection at all)
 
 ---
 
-## Teste de Validação
+## Validation Test
 
-### 1. Verificar CSP no Scalar
+### 1. Verify CSP in Scalar
 
-Acesse `https://localhost:7091/scalar/v1` e abra o DevTools (F12):
+Access `https://localhost:7091/scalar/v1` and open DevTools (F12):
 
-**Console → Network → Headers da resposta:**
+**Console → Network → Response Headers:**
 ```
 Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' cdn.jsdelivr.net unpkg.com; ...
 X-Frame-Options: SAMEORIGIN
 ```
 
-### 2. Verificar CSP na API
+### 2. Verify CSP in API
 
-Chame qualquer endpoint da API (`GET /api/accounts/balance`):
+Call any API endpoint (`GET /api/accounts/balance`):
 
-**Headers da resposta:**
+**Response Headers:**
 ```
 Content-Security-Policy: default-src 'none'; frame-ancestors 'none'
 X-Frame-Options: DENY
 ```
 
-### 3. Verificar Remoção de Fingerprinting
+### 3. Verify Fingerprinting Removal
 
-Em **ambos** os casos, os seguintes headers **não devem aparecer**:
+In **both** cases, the following headers **should not appear**:
 ```
-Server: (removido)
-X-Powered-By: (removido)
-X-AspNet-Version: (removido)
+Server: (removed)
+X-Powered-By: (removed)
+X-AspNet-Version: (removed)
 ```
 
 ---
 
-## Alternativas Consideradas (e Por Que Foram Rejeitadas)
+## Alternatives Considered (and Why They Were Rejected)
 
-### Opção 1: Desabilitar middleware em Development
+### Option 1: Disable middleware in Development
 ```csharp
 if (!app.Environment.IsDevelopment())
 {
@@ -160,64 +160,64 @@ if (!app.Environment.IsDevelopment())
 }
 ```
 
-**Problema:** Perde proteção em Development, onde desenvolvedores podem testar com dados reais.
+**Problem:** Loses protection in Development, where developers might test with real data.
 
-### Opção 2: CSP via `<meta>` tag no HTML do Scalar
-**Problema:** Scalar é servido por CDN — não temos controle sobre o HTML.
+### Option 2: CSP via `<meta>` tag in Scalar's HTML
+**Problem:** Scalar is served by CDN — we don't control the HTML.
 
-### Opção 3: Nonce-based CSP
+### Option 3: Nonce-based CSP
 ```csharp
 var nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(16));
 headers["Content-Security-Policy"] = $"script-src 'nonce-{nonce}'";
 ```
 
-**Problema:** Scalar não suporta nonces — precisaria modificar o código-fonte da biblioteca.
+**Problem:** Scalar does not support nonces — would require modifying the library's source code.
 
 ---
 
-## Checklist de Segurança
+## Security Checklist
 
-| Verificação | Status |
+| Verification | Status |
 |---|---|
-| CSP estrita em endpoints de API | ✅ |
-| CSP relaxada **apenas** em documentação | ✅ |
-| Documentação **não mapeada** em produção | ✅ (via `if (app.Environment.IsDevelopment())`) |
-| Headers anti-fingerprinting ativos | ✅ |
-| X-Content-Type-Options em todas as respostas | ✅ |
-| X-Frame-Options diferenciado por contexto | ✅ |
+| Strict CSP on API endpoints | ✅ |
+| Relaxed CSP **only** on documentation | ✅ |
+| Documentation **not mapped** in production | ✅ (via `if (app.Environment.IsDevelopment())`) |
+| Anti-fingerprinting headers active | ✅ |
+| X-Content-Type-Options on all responses | ✅ |
+| Context-specific X-Frame-Options | ✅ |
 
 ---
 
-## Próximos Passos (Opcional)
+## Next Steps (Optional)
 
-1. **Adicionar Subresource Integrity (SRI)** para CDNs do Scalar
-2. **Implementar CSP Report-Only** em staging para detectar violações
-3. **Adicionar testes automatizados** para validar headers por endpoint
+1. **Add Subresource Integrity (SRI)** for Scalar CDNs
+2. **Implement CSP Report-Only** in staging to detect violations
+3. **Add automated tests** to validate headers per endpoint
 
 ---
 
-## Comandos para Testar
+## Commands to Test
 
-### Iniciar a aplicação
+### Start the application
 ```bash
 cd c:\Users\WikiO\FinanceSap.Enterprise\FinanceSap.Api
 dotnet run
 ```
 
-### Testar Scalar
+### Test Scalar
 ```bash
-# Deve renderizar a interface completa
+# Should render the complete interface
 https://localhost:7091/scalar/v1
 ```
 
-### Testar API com CSP estrita
+### Test API with strict CSP
 ```bash
 curl -I https://localhost:7091/api/accounts/balance
-# Deve retornar: Content-Security-Policy: default-src 'none'; frame-ancestors 'none'
+# Should return: Content-Security-Policy: default-src 'none'; frame-ancestors 'none'
 ```
 
 ---
 
-**Refatoração concluída com sucesso!** 🎉
+**Refactoring completed successfully!** 🎉
 
-O Scalar agora funciona corretamente enquanto mantemos segurança máxima nos endpoints de API.
+Scalar now works correctly while maintaining maximum security on API endpoints.

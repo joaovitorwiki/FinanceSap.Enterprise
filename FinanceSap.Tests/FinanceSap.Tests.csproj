@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FinanceSap.Domain\FinanceSap.Domain.csproj" />
+    <ProjectReference Include="..\FinanceSap.Application\FinanceSap.Application.csproj" />
     <ProjectReference Include="..\FinanceSap.Api\FinanceSap.Api.csproj" />
     <ProjectReference Include="..\FinanceSap.Infrastructure\FinanceSap.Infrastructure.csproj" />
   </ItemGroup>

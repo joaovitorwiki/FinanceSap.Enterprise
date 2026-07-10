@@ -15,9 +15,17 @@ public sealed class AccountRepository(ApplicationDbContext context) : IAccountRe
                         .AsNoTracking()
                         .FirstOrDefaultAsync(x => x.Id == id, ct);
 
+    public async Task<Account?> GetByIdTrackedAsync(Guid id, CancellationToken ct = default)
+        => await context.Accounts
+                        .FirstOrDefaultAsync(x => x.Id == id, ct);
+
     public async Task<Account?> GetByCustomerIdAsync(Guid customerId, CancellationToken ct = default)
         => await context.Accounts
                         .AsNoTracking()
+                        .FirstOrDefaultAsync(x => x.CustomerId == customerId, ct);
+
+    public async Task<Account?> GetByCustomerIdTrackedAsync(Guid customerId, CancellationToken ct = default)
+        => await context.Accounts
                         .FirstOrDefaultAsync(x => x.CustomerId == customerId, ct);
 
     public async Task<bool> ExistsByCustomerIdAsync(Guid customerId, CancellationToken ct = default)

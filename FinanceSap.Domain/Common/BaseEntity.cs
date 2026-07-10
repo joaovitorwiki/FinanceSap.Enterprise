@@ -1,3 +1,5 @@
+using MediatR;
+
 namespace FinanceSap.Domain.Common;
 
 /// <summary>
@@ -61,10 +63,7 @@ public abstract class BaseEntity
 /// Marker interface para eventos de domínio.
 /// Permite identificar eventos de domínio no sistema de forma polimórfica.
 /// </summary>
-public interface IDomainEvent
+public interface IDomainEvent : INotification
 {
-    /// <summary>
-    /// Timestamp de quando o evento foi criado.
-    /// </summary>
     DateTime OccurredOn { get; }
 }
