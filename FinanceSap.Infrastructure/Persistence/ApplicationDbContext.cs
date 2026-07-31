@@ -17,6 +17,7 @@ public sealed class ApplicationDbContext(DbContextOptions<ApplicationDbContext> 
     public DbSet<Account>         Accounts          => Set<Account>();
     public DbSet<Loan>            Loans             => Set<Loan>();
     public DbSet<Transaction>     Transactions      => Set<Transaction>();
+    public DbSet<RefreshToken>    RefreshTokens     => Set<RefreshToken>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

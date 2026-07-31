@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Microsoft.AspNetCore.Mvc;
 
 namespace FinanceSap.Api.Middlewares;
 
@@ -9,12 +10,6 @@ public sealed class GlobalExceptionMiddleware(
     RequestDelegate next,
     ILogger<GlobalExceptionMiddleware> logger)
 {
-    // Payload fixo — imutável, sem interpolação de dados da exceção.
-    // Impede qualquer vazamento acidental por refatoração futura.
-    private static readonly byte[] SafeErrorPayload = JsonSerializer.SerializeToUtf8Bytes(
-        new { message = "Ocorreu um erro inesperado." }
-    );
-
     public async Task InvokeAsync(HttpContext context)
     {
         try
@@ -37,19 +32,36 @@ public sealed class GlobalExceptionMiddleware(
                 safeMethod
             );
 
-            await WriteErrorAsync(context);
+            await WriteProblemDetailsAsync(context, ex);
         }
     }
 
-    private static async Task WriteErrorAsync(HttpContext context)
+    private static async Task WriteProblemDetailsAsync(HttpContext context, Exception ex)
     {
         // Garante que headers não foram enviados antes de tentar escrever a resposta.
         if (context.Response.HasStarted) return;
 
         context.Response.Clear();
-        context.Response.StatusCode  = StatusCodes.Status500InternalServerError;
-        context.Response.ContentType = "application/json";
+        context.Response.ContentType = "application/problem+json";
 
-        await context.Response.Body.WriteAsync(SafeErrorPayload);
+        var problemDetails = new ProblemDetails
+        {
+            Title = "Ocorreu um erro interno no servidor.",
+            Status = StatusCodes.Status500InternalServerError,
+            Detail = "Um erro inesperado ocorreu. Contate o suporte.",
+            Instance = context.Request.Path,
+            Extensions = { ["traceId"] = context.TraceIdentifier ?? "unknown" }
+        };
+
+        // Para exceções de validação/domínio, usar status code apropriado
+        if (ex is ArgumentException or InvalidOperationException)
+        {
+            problemDetails.Status = StatusCodes.Status400BadRequest;
+            problemDetails.Title = "Requisição inválida";
+            problemDetails.Detail = ex.Message;
+        }
+
+        context.Response.StatusCode = problemDetails.Status ?? StatusCodes.Status500InternalServerError;
+        await context.Response.WriteAsync(JsonSerializer.Serialize(problemDetails));
     }
 }

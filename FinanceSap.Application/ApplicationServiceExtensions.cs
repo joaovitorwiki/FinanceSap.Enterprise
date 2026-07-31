@@ -27,6 +27,8 @@ public static class ApplicationServiceExtensions
         // FluentValidation — escaneia toda a assembly e registra todos os AbstractValidator<T>.
         services.AddValidatorsFromAssemblyContaining<CreateCustomerHandler>();
 
+        // Auth Service - registered in Api layer
+
         return services;
     }
 }

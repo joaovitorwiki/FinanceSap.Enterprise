@@ -1,223 +1,33 @@
-name: FinanceSap CI/CD Pipeline
+name: FinanceSap.Enterprise CI
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Enterprise-grade CI/CD pipeline with strict environment parity and observability.
-# ─────────────────────────────────────────────────────────────────────────────
 on:
   push:
-    branches: [ main, master, develop ]
+    branches: [ "main" ]
   pull_request:
-    branches: [ main, master ]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-# ── GitHub Actions Permissions (Principle of Least Privilege) ────────────────
-# Concede apenas as permissões mínimas necessárias para o workflow funcionar.
-# Ref: https://docs.github.com/en/actions/security-guides/automatic-token-authentication
-permissions:
-  contents: read        # Ler código do repositório
-  checks: write         # Criar check runs (test-reporter)
-  pull-requests: write  # Comentar em PRs com resultados de testes
-  actions: read         # Ler metadados de workflows
-
-env:
-  DOTNET_VERSION: '9.0.x'
-  SOLUTION_PATH: 'FinanceSap.Enterprise.sln'
-  TEST_PROJECT: 'FinanceSap.Tests/FinanceSap.Tests.csproj'
+    branches: [ "main" ]
 
 jobs:
-  # ═══════════════════════════════════════════════════════════════════════════
-  # STAGE 1 — Build & Unit Tests (Fast Feedback Loop)
-  # ═══════════════════════════════════════════════════════════════════════════
-  build-and-unit-tests:
-    name: 🔨 Build & Unit Tests
+  build-and-test:
+    name: Build and Test
     runs-on: ubuntu-latest
-    timeout-minutes: 10
 
     steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Full history for better blame/analysis
+    - name: Checkout repository
+      uses: actions/checkout@v4
 
-      - name: ⚙️ Setup .NET ${{ env.DOTNET_VERSION }}
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 9.0.x
 
-      - name: 📦 Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
+    - name: Restore dependencies
+      run: dotnet restore
 
-      - name: 🔄 Restore dependencies
-        run: dotnet restore ${{ env.SOLUTION_PATH }}
+    - name: Build solution
+      run: dotnet build --no-restore
 
-      - name: 🏗️ Build solution (Release)
-        run: |
-          dotnet build ${{ env.SOLUTION_PATH }} \
-            --configuration Release \
-            --no-restore \
-            /p:TreatWarningsAsErrors=true \
-            /p:WarningLevel=4
-
-      - name: 🧪 Run unit tests
-        run: |
-          dotnet test ${{ env.TEST_PROJECT }} \
-            --configuration Release \
-            --no-build \
-            --filter "FullyQualifiedName~ValueObjects" \
-            --logger "console;verbosity=normal" \
-            --logger "trx;LogFileName=unit-tests.trx" \
-            --logger "html;LogFileName=unit-tests.html" \
-            --collect:"XPlat Code Coverage" \
-            --results-directory ./test-results/unit
-
-      # ── Test Results Summary (Native GitHub Actions) ──────────────────────────
-      - name: 📊 Generate unit test summary
-        if: always()
-        run: |
-          echo "## 🧪 Unit Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          
-          if [ -f "./test-results/unit/unit-tests.trx" ]; then
-            TOTAL=$(grep -oP 'total="\K[0-9]+' ./test-results/unit/unit-tests.trx | head -1)
-            PASSED=$(grep -oP 'passed="\K[0-9]+' ./test-results/unit/unit-tests.trx | head -1)
-            FAILED=$(grep -oP 'failed="\K[0-9]+' ./test-results/unit/unit-tests.trx | head -1)
-            
-            echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
-            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-            echo "| Total  | $TOTAL |" >> $GITHUB_STEP_SUMMARY
-            echo "| ✅ Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
-            echo "| ❌ Failed | $FAILED |" >> $GITHUB_STEP_SUMMARY
-            
-            if [ "$FAILED" -gt 0 ]; then
-              echo "" >> $GITHUB_STEP_SUMMARY
-              echo "### ❌ Test Failures" >> $GITHUB_STEP_SUMMARY
-              echo '```' >> $GITHUB_STEP_SUMMARY
-              grep -A 10 'outcome="Failed"' ./test-results/unit/unit-tests.trx | head -100 >> $GITHUB_STEP_SUMMARY || echo "No detailed failure info"
-              echo '```' >> $GITHUB_STEP_SUMMARY
-              exit 1
-            fi
-          else
-            echo "⚠️ No test results found" >> $GITHUB_STEP_SUMMARY
-            exit 1
-          fi
-
-      - name: 📤 Upload coverage report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: unit-test-coverage
-          path: ./test-results/unit
-          retention-days: 7
-
-  # ═══════════════════════════════════════════════════════════════════════════
-  # STAGE 2 — Integration Tests (SQLite — sem service container externo)
-  # ═══════════════════════════════════════════════════════════════════════════
-  integration-tests:
-    name: 🧬 Integration Tests (SQLite)
-    runs-on: ubuntu-latest
-    needs: build-and-unit-tests
-    timeout-minutes: 15
-
-    steps:
-      - name: 📥 Checkout repository
-        uses: actions/checkout@v4
-
-      - name: ⚙️ Setup .NET ${{ env.DOTNET_VERSION }}
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: 📦 Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
-
-      - name: 🔄 Restore dependencies
-        run: dotnet restore ${{ env.SOLUTION_PATH }}
-
-      - name: 🏗️ Build solution (Release)
-        run: |
-          dotnet build ${{ env.SOLUTION_PATH }} \
-            --configuration Release \
-            --no-restore
-
-      # ── Integration Tests — SQLite em arquivo temporário isolado ──────────
-      # CustomWebApplicationFactory já cria um .db em Path.GetTempPath() por teste.
-      # Nenhuma connection string precisa ser injetada aqui.
-      - name: 🧬 Run integration tests
-        id: integration-tests
-        continue-on-error: true
-        env:
-          ASPNETCORE_ENVIRONMENT: Testing
-          # ── JWT via GitHub Secrets — nunca hardcoded ─────────────────────
-          Jwt__Key: ${{ secrets.JWT_KEY }}
-          Jwt__Issuer: ${{ secrets.JWT_ISSUER || 'FinanceSap' }}
-          Jwt__Audience: ${{ secrets.JWT_AUDIENCE || 'FinanceSap' }}
-          Logging__LogLevel__Default: Warning
-          Logging__LogLevel__Microsoft.EntityFrameworkCore.Database.Command: Warning
-
-        run: |
-          dotnet test ${{ env.TEST_PROJECT }} \
-            --configuration Release \
-            --no-build \
-            --filter "FullyQualifiedName~Integration" \
-            --logger "console;verbosity=detailed" \
-            --logger "trx;LogFileName=integration-tests.trx" \
-            --logger "html;LogFileName=integration-tests.html" \
-            --results-directory ./test-results/integration
-
-      # ── Test Results Analysis (Native GitHub Summary) ─────────────────────
-      - name: 📊 Analyze integration test results
-        if: always()
-        run: |
-          echo "## 🧬 Integration Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-
-          if [ -f "./test-results/integration/integration-tests.trx" ]; then
-            TOTAL=$(grep -oP 'total="\K[0-9]+' ./test-results/integration/integration-tests.trx | head -1)
-            PASSED=$(grep -oP 'passed="\K[0-9]+' ./test-results/integration/integration-tests.trx | head -1)
-            FAILED=$(grep -oP 'failed="\K[0-9]+' ./test-results/integration/integration-tests.trx | head -1)
-
-            echo "| Metric | Count |" >> $GITHUB_STEP_SUMMARY
-            echo "|--------|-------|" >> $GITHUB_STEP_SUMMARY
-            echo "| Total  | $TOTAL |" >> $GITHUB_STEP_SUMMARY
-            echo "| ✅ Passed | $PASSED |" >> $GITHUB_STEP_SUMMARY
-            echo "| ❌ Failed | $FAILED |" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-
-            if [ "$FAILED" -gt 0 ]; then
-              echo "### ❌ Failed Tests Details" >> $GITHUB_STEP_SUMMARY
-              echo '```' >> $GITHUB_STEP_SUMMARY
-              grep -B 2 -A 10 'outcome="Failed"' ./test-results/integration/integration-tests.trx | head -200 >> $GITHUB_STEP_SUMMARY || echo "No detailed failure info available"
-              echo '```' >> $GITHUB_STEP_SUMMARY
-            fi
-          else
-            echo "⚠️ No test results file found" >> $GITHUB_STEP_SUMMARY
-          fi
-
-      # ── Fail the Job if Tests Failed ──────────────────────────────────────
-      - name: ❌ Fail if tests failed
-        if: steps.integration-tests.outcome == 'failure'
-        run: |
-          echo "❌ Integration tests failed. Check the summary above for details."
-          exit 1
-
-      # ── Artifact Upload for Post-Mortem Analysis ──────────────────────────
-      - name: 📤 Upload test artifacts
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: integration-test-results
-          path: ./test-results/integration/**/*
-          retention-days: 30
+    - name: Run tests
+      run: dotnet test --no-build --verbosity normal
+      env:
+        # Placeholder JWT secret for testing - handled by CustomWebApplicationFactory
+        Jwt__Secret: ${{ secrets.JWT_SECRET || 'test-secret-at-least-32-chars-long-for-hmac-sha256' }}

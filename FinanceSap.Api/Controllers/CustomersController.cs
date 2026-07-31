@@ -19,7 +19,7 @@ public sealed class CustomersController(
     IMediator mediator) : ControllerBase
 {
     [HttpPost]
-    [EnableRateLimiting(ApiServiceExtensions.CustomersRateLimitPolicy)]
+    [EnableRateLimiting(ApiServiceExtensions.GlobalRateLimitPolicy)]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]

@@ -20,6 +20,8 @@ if (!string.IsNullOrWhiteSpace(sqliteConnectionString))
 
 builder.Services.AddApplicationServices();
 builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddApiServices();
+
 builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
@@ -27,12 +29,19 @@ builder.Services.AddOpenApi();
 builder.Services.AddApiSecurity(builder.Configuration, builder.Environment);
 
 // CORS registrado no container — política configurável por ambiente.
-// Em produção, substitua AllowAnyOrigin por origens explícitas.
+// Configuração segura para desenvolvimento com origens específicas.
+// Em produção, deve-se configurar origens explícitas e não usar AllowAnyMethod/AllowAnyHeader.
 builder.Services.AddCors(options =>
-    options.AddDefaultPolicy(policy =>
-        policy.AllowAnyOrigin()
+{
+    options.AddPolicy("DevelopmentCorsPolicy", policy =>
+        policy.WithOrigins(
+                "http://localhost:3000",
+                "http://localhost:5173",
+                "http://localhost:4200")
               .AllowAnyMethod()
-              .AllowAnyHeader()));
+              .AllowAnyHeader()
+              .AllowCredentials());
+});
 
 // ── Pipeline ──────────────────────────────────────────────────────────────────
 // A ORDEM É CRÍTICA para segurança:
@@ -55,16 +64,28 @@ using (var scope = app.Services.CreateScope())
     try
     {
         dbContext.Database.Migrate();
-        app.Logger.LogInformation("✅ SQLite database initialized successfully");
+        app.Logger.LogInformation("SQLite database initialized successfully");
+
+        // Executa o seeding de dados em ambiente de desenvolvimento
+        await app.SeedAsync();
     }
     catch (Exception ex)
     {
-        app.Logger.LogError(ex, "❌ Error initializing SQLite database");
+        app.Logger.LogError(ex, "Error initializing SQLite database");
         if (!app.Environment.IsEnvironment("Testing")) throw;
     }
 }
 
-app.UseCors();
+// Usa a política CORS específica para desenvolvimento
+if (app.Environment.IsDevelopment())
+{
+    app.UseCors("DevelopmentCorsPolicy");
+}
+else
+{
+    // Em produção, deve-se configurar uma política CORS segura com origens explícitas
+    app.UseCors();
+}
 app.UseRateLimiter();
 app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseMiddleware<GlobalExceptionMiddleware>();

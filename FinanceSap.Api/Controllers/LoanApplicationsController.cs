@@ -1,16 +1,19 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using FinanceSap.Api.Extensions;
 using FinanceSap.Application.Queries;
 using FinanceSap.Application.UseCases.CreateLoanApplication;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace FinanceSap.Api.Controllers;
 
 [ApiController]
 [Consumes("application/json")]
 [Route("api/[controller]")]
+[EnableRateLimiting(ApiServiceExtensions.GlobalRateLimitPolicy)]
 public sealed class LoanApplicationsController(
     CreateLoanApplicationUseCase useCase,
     IMediator mediator) : ControllerBase

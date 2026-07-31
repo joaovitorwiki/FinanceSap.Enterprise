@@ -1,12 +1,17 @@
+using System.Security.Claims;
+using System.Text.Json;
 using System.Threading.RateLimiting;
+using FinanceSap.Api.Services;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 
 namespace FinanceSap.Api.Extensions;
 
 public static class ApiServiceExtensions
 {
-    // Constante compartilhada entre DI e controller — elimina strings mágicas duplicadas.
-    public const string CustomersRateLimitPolicy = "customers-fixed-window";
+    // Políticas de Rate Limiting
+    public const string AuthRateLimitPolicy = "auth-fixed-window";
+    public const string GlobalRateLimitPolicy = "global-fixed-window";
 
     public static IServiceCollection AddApiSecurity(
         this IServiceCollection services,
@@ -15,15 +20,23 @@ public static class ApiServiceExtensions
     {
         services.AddRateLimiter(options =>
         {
-            // Resposta 429 genérica — não revela limites internos ao atacante.
-            // Não inclui Retry-After para não auxiliar timing de ataques automatizados.
+            // Resposta 429 padronizada com ProblemDetails (RFC 7807)
             options.OnRejected = async (ctx, ct) =>
             {
-                ctx.HttpContext.Response.StatusCode  = StatusCodes.Status429TooManyRequests;
-                ctx.HttpContext.Response.ContentType = "application/json";
+                ctx.HttpContext.Response.StatusCode = StatusCodes.Status429TooManyRequests;
+                ctx.HttpContext.Response.ContentType = "application/problem+json";
+
+                var problemDetails = new ProblemDetails
+                {
+                    Title = "Muitas requisições",
+                    Status = StatusCodes.Status429TooManyRequests,
+                    Detail = "Você excedeu o limite de requisições. Tente novamente mais tarde.",
+                    Instance = ctx.HttpContext.Request.Path,
+                    Extensions = { ["traceId"] = ctx.HttpContext.TraceIdentifier }
+                };
 
                 await ctx.HttpContext.Response.WriteAsync(
-                    """{"message":"Muitas requisições. Tente novamente em instantes."}""",
+                    JsonSerializer.Serialize(problemDetails),
                     ct
                 );
             };
@@ -31,36 +44,63 @@ public static class ApiServiceExtensions
             // ── Environment-Based Rate Limiting ──────────────────────────────────────
             // Development/Testing: limites relaxados para não bloquear testes.
             // Production: limites estritos para proteção contra abuso.
-            var isDevelopmentOrTesting = environment.IsDevelopment() || 
+            var isDevelopmentOrTesting = environment.IsDevelopment() ||
                                         environment.IsEnvironment("Testing");
 
-            var section     = configuration.GetSection("RateLimiting:Customers");
-            var permitLimit = isDevelopmentOrTesting 
-                ? 1000  // Limite alto em dev/test — não bloqueia testes de integração
-                : section.GetValue<int>("PermitLimit", 10);
-            
-            var window = isDevelopmentOrTesting
-                ? TimeSpan.FromSeconds(1)  // Janela curta em dev/test
-                : TimeSpan.FromSeconds(section.GetValue<int>("WindowSeconds", 60));
+            // ── Auth Policy (Brute-Force Protection) ────────────────────────────────
+            // Endpoints de autenticação: 5 requisições por minuto por IP
+            var authPermitLimit = isDevelopmentOrTesting ? 100 : 5;
+            var authWindow = isDevelopmentOrTesting ? TimeSpan.FromSeconds(1) : TimeSpan.FromMinutes(1);
 
-            options.AddPolicy(CustomersRateLimitPolicy, httpContext =>
+            options.AddPolicy(AuthRateLimitPolicy, httpContext =>
                 RateLimitPartition.GetFixedWindowLimiter(
-                    // Chave de partição: IP real do cliente.
-                    // Em produção atrás de proxy reverso, habilite ForwardedHeaders
-                    // e use X-Forwarded-For após validar que o proxy é confiável.
                     partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
                     factory: _ => new FixedWindowRateLimiterOptions
                     {
-                        PermitLimit          = permitLimit,
-                        Window               = window,
+                        PermitLimit = authPermitLimit,
+                        Window = authWindow,
                         QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                        // QueueLimit = 0: rejeita imediatamente ao atingir o limite.
-                        // Fila aberta daria vantagem ao atacante mantendo conexões abertas.
-                        QueueLimit           = 0
+                        QueueLimit = 0 // Rejeita imediatamente ao atingir o limite
                     }
                 )
             );
+
+            // ── Global Policy (General Protection) ──────────────────────────────────
+            // Endpoints de transações e consultas: 60 requisições por minuto por usuário autenticado/IP
+            var globalPermitLimit = isDevelopmentOrTesting ? 1000 : 60;
+            var globalWindow = isDevelopmentOrTesting ? TimeSpan.FromSeconds(1) : TimeSpan.FromMinutes(1);
+
+            options.AddPolicy(GlobalRateLimitPolicy, httpContext =>
+            {
+                // Para usuários autenticados, usa o UserId como chave
+                // Para usuários não autenticados, usa o IP
+                var partitionKey = httpContext.User.Identity?.IsAuthenticated == true
+                    ? httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown"
+                    : httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey: partitionKey,
+                    factory: _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = globalPermitLimit,
+                        Window = globalWindow,
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        QueueLimit = 0 // Rejeita imediatamente ao atingir o limite
+                    }
+                );
+            });
         });
+
+        return services;
+    }
+
+    /// <summary>
+    /// Registers API-specific services.
+    /// </summary>
+    public static IServiceCollection AddApiServices(this IServiceCollection services)
+    {
+        // Auth Service
+        services.AddScoped<IAuthService, AuthService>();
 
         return services;
     }

@@ -1,5 +1,6 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using FinanceSap.Api.Extensions;
 using FinanceSap.Application.Queries.GetAccountBalance;
 using FinanceSap.Application.Queries.GetAccountStatement;
 using FinanceSap.Application.UseCases.Deposit;
@@ -9,12 +10,14 @@ using FinanceSap.Domain.Common;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace FinanceSap.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
+[EnableRateLimiting(ApiServiceExtensions.GlobalRateLimitPolicy)]
 [Consumes("application/json")]
 public sealed class AccountsController(IMediator mediator) : ControllerBase
 {
