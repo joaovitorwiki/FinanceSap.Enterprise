@@ -1,119 +1,86 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using FinanceSap.Application.Commands;
 using FinanceSap.Application.Queries;
-using FinanceSap.Application.UseCases.ApproveLoan;
-using FinanceSap.Application.UseCases.RejectLoan;
-using FinanceSap.Application.UseCases.RequestLoan;
+using FinanceSap.Domain.Common;
+using FinanceSap.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
-namespace FinanceSap.Api.Controllers;
-
-[ApiController]
-[Consumes("application/json")]
-[Route("api/[controller]")]
-public sealed class LoansController(
-    RequestLoanHandler handler,
-    IMediator mediator) : ControllerBase
+namespace FinanceSap.Api.Controllers
 {
-    [HttpPost]
-    [ProducesResponseType(StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RequestLoan(
-        [FromBody] RequestLoanCommand command,
-        CancellationToken ct = default)
+    [ApiController]
+    [Route("api/[controller]")]
+    public class LoansController : ControllerBase
     {
-        var result = await handler.HandleAsync(command, ct);
+        private readonly IMediator _mediator;
 
-        if (!result.IsSuccess)
+        public LoansController(IMediator mediator)
         {
-            return result.ErrorType switch
-            {
-                Domain.Common.ErrorType.NotFound   => NotFound(new { error = result.Error }),
-                Domain.Common.ErrorType.Validation => BadRequest(new { error = result.Error }),
-                _                                  => BadRequest(new { error = result.Error })
-            };
+            _mediator = mediator;
         }
 
-        return CreatedAtAction(nameof(GetLoan), new { id = result.Value }, new { loanId = result.Value });
-    }
-
-    [HttpGet("{id:guid}")]
-    [Authorize]
-    [ProducesResponseType(StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetLoan(Guid id, CancellationToken ct)
-    {
-        var userId = GetUserId();
-        if (userId is null) return Unauthorized();
-
-        var loan = await mediator.Send(new GetLoanByIdQuery(id, userId.Value), ct);
-        return loan is null ? NotFound() : Ok(loan);
-    }
-
-    // PUT /api/loans/{id}/approve
-    [HttpPut("{id:guid}/approve")]
-    [Authorize]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Approve(Guid id, CancellationToken ct)
-    {
-        var userId = GetUserId();
-        if (userId is null) return Unauthorized();
-
-        var result = await mediator.Send(new ApproveLoanCommand(id, userId.Value), ct);
-
-        if (!result.IsSuccess)
+        /// <summary>
+        /// Creates a new loan request.
+        /// Returns 201 Created with the loan on success, or appropriate error response on failure.
+        /// </summary>
+        [HttpPost]
+        [Authorize]
+        public async Task<IActionResult> CreateLoan([FromBody] CreateLoanCommand command)
         {
-            return result.ErrorType switch
+            var result = await _mediator.Send(command);
+
+            if (!result.IsSuccess)
             {
-                Domain.Common.ErrorType.NotFound   => NotFound(new { error = result.Error }),
-                Domain.Common.ErrorType.Validation => BadRequest(new { error = result.Error }),
-                _                                  => BadRequest(new { error = result.Error })
-            };
+                return result.ErrorType switch
+                {
+                    ErrorType.NotFound => NotFound(new { message = result.Error }),
+                    ErrorType.Validation => BadRequest(new { message = result.Error }),
+                    ErrorType.Conflict => Conflict(new { message = result.Error }),
+                    _ => StatusCode(500, new { message = "Erro interno do servidor." })
+                };
+            }
+
+            // At this point, result.Value is guaranteed to be non-null
+            var loan = result.Value!;
+            return CreatedAtAction(nameof(GetLoan), new { id = loan.Id }, loan);
         }
 
-        return NoContent();
-    }
-
-    // PUT /api/loans/{id}/reject
-    [HttpPut("{id:guid}/reject")]
-    [Authorize]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> Reject(Guid id, [FromBody] RejectLoanRequest? body, CancellationToken ct)
-    {
-        var userId = GetUserId();
-        if (userId is null) return Unauthorized();
-
-        var result = await mediator.Send(new RejectLoanCommand(id, userId.Value, body?.Reason), ct);
-
-        if (!result.IsSuccess)
+        /// <summary>
+        /// Retrieves a loan by ID with IDOR protection.
+        /// Users can only access their own loans unless they have Admin/Analyst role.
+        /// </summary>
+        [HttpGet("{id:guid}")]
+        [Authorize]
+        public async Task<IActionResult> GetLoan([FromRoute] Guid id)
         {
-            return result.ErrorType switch
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            bool isAdmin = User.IsInRole("Admin") || User.IsInRole("Analyst");
+
+            var query = new GetLoanByIdQuery(id, userId.Value, isAdmin);
+            var result = await _mediator.Send(query);
+
+            if (!result.IsSuccess)
             {
-                Domain.Common.ErrorType.NotFound   => NotFound(new { error = result.Error }),
-                Domain.Common.ErrorType.Validation => BadRequest(new { error = result.Error }),
-                _                                  => BadRequest(new { error = result.Error })
-            };
+                return result.ErrorType switch
+                {
+                    ErrorType.NotFound => NotFound(new { message = result.Error }),
+                    ErrorType.Validation => BadRequest(new { message = result.Error }),
+                    _ => StatusCode(500, new { message = "Erro interno do servidor." })
+                };
+            }
+
+            return Ok(result.Value);
         }
 
-        return NoContent();
-    }
-
-    private Guid? GetUserId()
-    {
-        var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                 ?? User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
-        return Guid.TryParse(claim, out var id) ? id : null;
+        private Guid? GetUserId()
+        {
+            var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                       ?? User.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
+            return Guid.TryParse(claim, out var id) ? id : null;
+        }
     }
 }
-
-public sealed record RejectLoanRequest(string? Reason);

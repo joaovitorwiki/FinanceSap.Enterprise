@@ -1,5 +1,6 @@
 using System.Text;
 using FinanceSap.Domain.Interfaces;
+using FinanceSap.Domain.Services;
 using FinanceSap.Infrastructure.Identity;
 using FinanceSap.Infrastructure.Persistence;
 using FinanceSap.Infrastructure.Repositories;
@@ -97,6 +98,9 @@ public static class DependencyInjection
         
         // User Context — abstração para acesso ao usuário autenticado.
         services.AddScoped<IUserContext, UserContext>();
+
+        // Loan Calculator — Strategy Pattern implementation for loan calculations.
+        services.AddScoped<ILoanCalculator, CompoundInterestCalculator>();
 
         return services;
     }

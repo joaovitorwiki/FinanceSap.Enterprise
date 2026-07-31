@@ -21,7 +21,7 @@ public sealed class CustomWebApplicationFactory
         builder.UseSetting("ConnectionStrings:DefaultConnection", $"Data Source={_dbPath}");
         builder.UseSetting("Logging:LogLevel:Microsoft.EntityFrameworkCore.Database.Command", "Warning");
         // JWT key mínima de 32 chars para testes — nunca usada em produção.
-        builder.UseSetting("Jwt:Key", "test-only-key-32-chars-minimum!!");
+        builder.UseSetting("Jwt:Secret", "test-only-key-32-chars-minimum!!");
         builder.UseSetting("Jwt:Issuer", "FinanceSap");
         builder.UseSetting("Jwt:Audience", "FinanceSap");
     }
