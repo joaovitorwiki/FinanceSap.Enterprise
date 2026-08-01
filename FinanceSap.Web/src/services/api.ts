@@ -46,7 +46,7 @@ const saveAuthData = (data: StoredAuthData): void => {
 /**
  * Clears auth data from localStorage.
  */
-const clearAuthData = (): void => {
+export const clearAuthData = (): void => {
   localStorage.removeItem(AUTH_STORAGE_KEY);
 };
 

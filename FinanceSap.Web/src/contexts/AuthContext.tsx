@@ -29,36 +29,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Initialize auth state from localStorage
-  useEffect(() => {
-    const initializeAuth = () => {
-      try {
-        const currentUser = getCurrentUser();
-        if (currentUser) {
-          setUser(currentUser);
-        }
-      } catch (error) {
-        console.error('Failed to initialize auth state:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+   // Initialize auth state from localStorage
+   useEffect(() => {
+     const initializeAuth = () => {
+       try {
+         const currentUser = getCurrentUser();
+         if (currentUser) {
+           setUser(currentUser);
+         }
+       } catch (error) {
+         console.error('Failed to initialize auth state:', error);
+         // Clear any potentially corrupted auth data
+         localStorage.removeItem('financesap:auth');
+       } finally {
+         setIsLoading(false);
+       }
+     };
 
-    initializeAuth();
-  }, []);
+     initializeAuth();
+   }, []);
 
-  /**
-   * Login function that authenticates the user and updates state.
-   */
-  const login = async (email: string, password: string) => {
-    setIsLoading(true);
-    try {
-      const response = await apiLogin(email, password);
-      setUser(response.user);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+   /**
+    * Login function that authenticates the user and updates state.
+    * @throws {AxiosError} When login fails (e.g., 401 Unauthorized)
+    */
+   const login = async (email: string, password: string) => {
+     setIsLoading(true);
+     try {
+       const response = await apiLogin(email, password);
+       setUser(response.user);
+     } catch (error) {
+       // Re-throw the error to be handled by the component
+       throw error;
+     } finally {
+       setIsLoading(false);
+     }
+   };
 
   /**
    * Logout function that clears auth state.

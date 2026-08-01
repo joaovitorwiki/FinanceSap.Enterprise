@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using FinanceSap.Domain.Entities;
+using FinanceSap.Domain.Interfaces;
 using FinanceSap.Infrastructure.Identity;
 using FinanceSap.Infrastructure.Repositories;
 using Microsoft.AspNetCore.Identity;
@@ -48,11 +49,13 @@ public interface IAuthService
 public sealed class AuthService(
     UserManager<ApplicationUser> userManager,
     IConfiguration configuration,
-    IRefreshTokenRepository refreshTokenRepository) : IAuthService
+    IRefreshTokenRepository refreshTokenRepository,
+    ICustomerRepository customerRepository) : IAuthService
 {
     private readonly UserManager<ApplicationUser> _userManager = userManager;
     private readonly IConfiguration _configuration = configuration;
     private readonly IRefreshTokenRepository _refreshTokenRepository = refreshTokenRepository;
+    private readonly ICustomerRepository _customerRepository = customerRepository;
 
     /// <inheritdoc />
     public async Task<AuthResult> AuthenticateAsync(string email, string password, string ipAddress)
@@ -60,13 +63,13 @@ public sealed class AuthService(
         var user = await _userManager.FindByEmailAsync(email);
         if (user is null)
         {
-            return new AuthResult(false, "Credenciais inválidas", null, null);
+            return new AuthResult(false, "Credenciais inválidas", null, null, null);
         }
 
         var isPasswordValid = await _userManager.CheckPasswordAsync(user, password);
         if (!isPasswordValid)
         {
-            return new AuthResult(false, "Credenciais inválidas", null, null);
+            return new AuthResult(false, "Credenciais inválidas", null, null, null);
         }
 
         // Revoke any existing active tokens for this user
@@ -80,22 +83,25 @@ public sealed class AuthService(
         var jwtToken = GenerateJwtToken(user);
         var refreshToken = await GenerateRefreshToken(user, ipAddress);
 
-        return new AuthResult(true, null, jwtToken, refreshToken);
+        // Get user data including customer information
+        var userData = await GetUserDataAsync(user);
+
+        return new AuthResult(true, null, jwtToken, refreshToken, userData);
     }
 
     /// <inheritdoc />
      public async Task<AuthResult> RefreshTokenAsync(string token, string ipAddress)
      {
          var refreshToken = await _refreshTokenRepository.FindByTokenAsync(token);
-         if (refreshToken is null || refreshToken.RevokedAt != null || refreshToken.ExpiresAt <= DateTime.UtcNow)
-         {
-             return new AuthResult(false, "Refresh token inválido ou expirado", null, null);
-         }
+        if (refreshToken is null || refreshToken.RevokedAt != null || refreshToken.ExpiresAt <= DateTime.UtcNow)
+        {
+            return new AuthResult(false, "Refresh token inválido ou expirado", null, null, null);
+        }
 
         var user = await _userManager.FindByIdAsync(refreshToken.UserId.ToString());
         if (user is null)
         {
-            return new AuthResult(false, "Usuário não encontrado", null, null);
+            return new AuthResult(false, "Usuário não encontrado", null, null, null);
         }
 
         // Revoke the current refresh token
@@ -106,7 +112,10 @@ public sealed class AuthService(
         var jwtToken = GenerateJwtToken(user);
         var newRefreshToken = await GenerateRefreshToken(user, ipAddress);
 
-        return new AuthResult(true, null, jwtToken, newRefreshToken);
+        // Get user data including customer information
+        var userData = await GetUserDataAsync(user);
+
+        return new AuthResult(true, null, jwtToken, newRefreshToken, userData);
     }
 
     /// <inheritdoc />
@@ -185,6 +194,32 @@ public sealed class AuthService(
 
         return token;
     }
+
+    /// <summary>
+    /// Gets user data including customer information for authentication responses.
+    /// </summary>
+    /// <param name="user">The application user.</param>
+    /// <returns>User data with all required fields.</returns>
+    private async Task<UserData> GetUserDataAsync(ApplicationUser user)
+    {
+        // Get user roles
+        var roles = (await _userManager.GetRolesAsync(user)).ToArray();
+
+        // If user has a customer, get customer data
+        Customer? customer = null;
+        if (user.CustomerId.HasValue)
+        {
+            customer = await _customerRepository.GetByIdAsync(user.CustomerId.Value);
+        }
+
+        return new UserData(
+            Id: user.Id,
+            Email: user.Email!,
+            Name: customer?.FullName ?? user.UserName ?? "Unknown",
+            Document: customer?.Document ?? "00000000000",
+            Roles: roles
+        );
+    }
 }
 
 /// <summary>
@@ -194,4 +229,15 @@ public sealed record AuthResult(
     bool Success,
     string? ErrorMessage,
     string? JwtToken,
-    string? RefreshToken);
+    string? RefreshToken,
+    UserData? User);
+
+/// <summary>
+/// User data returned in authentication responses.
+/// </summary>
+public sealed record UserData(
+    Guid Id,
+    string Email,
+    string Name,
+    string Document,
+    string[] Roles);

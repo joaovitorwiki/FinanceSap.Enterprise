@@ -31,16 +31,18 @@ const Login: React.FC = () => {
   /**
    * Handles form submission and login process.
    */
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setErrors({});
-    setGeneralError(null);
+   const handleSubmit = async (e: React.FormEvent) => {
+     e.preventDefault();
+     setIsSubmitting(true);
+     setErrors({});
+     setGeneralError(null);
 
-    try {
-      await login(email, password);
-      navigate('/dashboard');
-    } catch (error: any) {
+     try {
+       await login(email, password);
+       // Small delay to ensure auth state is updated before navigation
+       await new Promise(resolve => setTimeout(resolve, 100));
+       navigate('/dashboard', { replace: true });
+     } catch (error: any) {
       // Handle RFC 7807 ProblemDetails responses
       if (error.response?.data) {
         const problemDetails: ProblemDetails = error.response.data;

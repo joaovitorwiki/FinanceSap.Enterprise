@@ -46,9 +46,9 @@ public sealed class AuthController(
 
         return Ok(new
         {
-            token = authResult.JwtToken,
+            accessToken = authResult.JwtToken,
             refreshToken = authResult.RefreshToken,
-            expiresIn = 900 // 15 min em segundos
+            user = authResult.User
         });
     }
 
@@ -116,9 +116,9 @@ public sealed class AuthController(
 
         return Ok(new
         {
-            token = authResult.JwtToken,
+            accessToken = authResult.JwtToken,
             refreshToken = authResult.RefreshToken,
-            expiresIn = 900 // 15 min em segundos
+            user = authResult.User
         });
     }
 
