@@ -3,7 +3,7 @@ export interface User {
   name: string;
   email: string;
   document: string;
-  role: 'Customer' | 'Admin';
+  role: 'Customer' | 'Admin' | 'Manager';
 }
 
 export interface Account {
@@ -16,7 +16,7 @@ export interface Account {
 export interface Transaction {
   id: string;
   amount: number;
-  type: 'Deposit' | 'Withdrawal' | 'Transfer';
+  type: 'Credit' | 'Debit';
   description: string;
   date: string;
   accountId: string;
@@ -47,4 +47,30 @@ export interface Loan {
 export interface LoanRequest {
   amount: number;
   installments: number;
+}
+
+export interface TransactionStatementResult {
+  accountId: string;
+  balance: number;
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  transactions: Transaction[];
+}
+
+export interface StoredAuthData {
+  accessToken: string;
+  refreshToken: string;
+  user: User;
+}
+
+export interface AuthResponse {
+  accessToken: string;
+  refreshToken: string;
+  user: User;
+}
+
+export interface RefreshRequest {
+  expiredToken: string;
+  refreshToken: string;
 }

@@ -10,7 +10,16 @@
 
 import axios, { AxiosError } from 'axios';
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
-import type { AuthResponse, ProblemDetails, RefreshRequest, StoredAuthData, User, Loan, LoanRequest } from '../types';
+import type {
+  AuthResponse,
+  ProblemDetails,
+  RefreshRequest,
+  StoredAuthData,
+  User,
+  Loan,
+  LoanRequest,
+  TransactionStatementResult
+} from '../types';
 
 // Constants
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5153/api';
@@ -214,7 +223,7 @@ export const getMyLoans = async (): Promise<Loan[]> => {
  * Requests a new loan.
  */
 export const requestLoan = async (loanData: LoanRequest): Promise<Loan> => {
-  const response = await api.post<Loan>('/loans/request', loanData);
+  const response = await api.post<Loan>('/loans', loanData);
   return response.data;
 };
 
@@ -229,16 +238,22 @@ export const getPendingLoans = async (): Promise<Loan[]> => {
 /**
  * Approves a loan.
  */
-export const approveLoan = async (loanId: string): Promise<Loan> => {
-  const response = await api.post<Loan>(`/loans/${loanId}/approve`);
-  return response.data;
+export const approveLoan = async (loanId: string): Promise<void> => {
+  await api.post(`/loans/${loanId}/approve`);
 };
 
 /**
  * Rejects a loan.
  */
-export const rejectLoan = async (loanId: string, reason?: string): Promise<Loan> => {
-  const response = await api.post<Loan>(`/loans/${loanId}/reject`, { reason });
+export const rejectLoan = async (loanId: string, reason?: string): Promise<void> => {
+  await api.post(`/loans/${loanId}/reject`, { reason });
+};
+
+/**
+ * Gets the transaction history for the authenticated user.
+ */
+export const getTransactions = async (): Promise<TransactionStatementResult> => {
+  const response = await api.get<TransactionStatementResult>('/transactions');
   return response.data;
 };
 

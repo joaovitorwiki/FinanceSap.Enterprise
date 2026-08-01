@@ -135,6 +135,55 @@ namespace FinanceSap.Api.Controllers
             return NoContent();
         }
 
+        /// <summary>
+        /// Retrieves all loans for the authenticated customer.
+        /// </summary>
+        [HttpGet("my-loans")]
+        [Authorize]
+        public async Task<IActionResult> GetMyLoans()
+        {
+            var userId = GetUserId();
+            if (userId is null) return Unauthorized();
+
+            var query = new GetLoansByCustomerQuery(userId.Value);
+            var result = await _mediator.Send(query);
+
+            if (!result.IsSuccess)
+            {
+                return result.ErrorType switch
+                {
+                    ErrorType.NotFound => NotFound(new { message = result.Error }),
+                    ErrorType.Validation => BadRequest(new { message = result.Error }),
+                    _ => StatusCode(500, new { message = "Erro interno do servidor." })
+                };
+            }
+
+            return Ok(result.Value);
+        }
+
+        /// <summary>
+        /// Retrieves all pending loan requests (Admin/Manager only).
+        /// </summary>
+        [HttpGet("pending")]
+        [Authorize(Roles = "Admin,Manager")]
+        public async Task<IActionResult> GetPendingLoans()
+        {
+            var query = new GetPendingLoansQuery();
+            var result = await _mediator.Send(query);
+
+            if (!result.IsSuccess)
+            {
+                return result.ErrorType switch
+                {
+                    ErrorType.NotFound => NotFound(new { message = result.Error }),
+                    ErrorType.Validation => BadRequest(new { message = result.Error }),
+                    _ => StatusCode(500, new { message = "Erro interno do servidor." })
+                };
+            }
+
+            return Ok(result.Value);
+        }
+
         private Guid? GetUserId()
         {
             var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
