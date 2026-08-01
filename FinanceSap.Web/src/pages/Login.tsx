@@ -69,21 +69,28 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
-          FinanceSap
-        </h2>
-        <p className="mt-2 text-center text-sm text-gray-600">
-          Sistema Financeiro Empresarial
-        </p>
+        <div className="text-center">
+          <h2 className="text-3xl font-bold text-gray-900">
+            FinanceSap
+          </h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Sistema Financeiro Empresarial
+          </p>
+        </div>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
+        <div className="bg-white py-8 px-4 shadow-xl sm:rounded-2xl sm:px-10">
+          <div className="text-center mb-8">
+            <h3 className="text-2xl font-semibold text-gray-900">Acesse sua conta</h3>
+            <p className="mt-1 text-sm text-gray-500">Gerencie suas finanças com segurança e eficiência</p>
+          </div>
+
           <form className="space-y-6" onSubmit={handleSubmit}>
             {generalError && (
-              <div className="rounded-md bg-red-50 p-4">
+              <div className="rounded-md bg-red-50 p-4 border-l-4 border-red-400">
                 <div className="flex">
                   <div className="flex-shrink-0">
                     <AlertCircle className="h-5 w-5 text-red-400" aria-hidden="true" />
@@ -108,9 +115,10 @@ const Login: React.FC = () => {
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className={`appearance-none block w-full px-3 py-2 border ${
+                  className={`appearance-none block w-full px-4 py-3 border ${
                     errors.email ? 'border-red-300' : 'border-gray-300'
-                  } rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
+                  } rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out sm:text-sm`}
+                  placeholder="seu@email.com"
                 />
                 {errors.email && (
                   <p className="mt-2 text-sm text-red-600">{errors.email}</p>
@@ -122,7 +130,7 @@ const Login: React.FC = () => {
               <label htmlFor="password" className="block text-sm font-medium text-gray-700">
                 Senha
               </label>
-              <div className="mt-1">
+              <div className="mt-1 relative">
                 <input
                   id="password"
                   name="password"
@@ -131,9 +139,10 @@ const Login: React.FC = () => {
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className={`appearance-none block w-full px-3 py-2 border ${
+                  className={`appearance-none block w-full px-4 py-3 border ${
                     errors.password ? 'border-red-300' : 'border-gray-300'
-                  } rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm`}
+                  } rounded-lg shadow-sm placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition duration-150 ease-in-out sm:text-sm`}
+                  placeholder="••••••••"
                 />
                 {errors.password && (
                   <p className="mt-2 text-sm text-red-600">{errors.password}</p>
@@ -147,7 +156,7 @@ const Login: React.FC = () => {
                   id="remember-me"
                   name="remember-me"
                   type="checkbox"
-                  className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                 />
                 <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
                   Lembrar-me
@@ -155,7 +164,7 @@ const Login: React.FC = () => {
               </div>
 
               <div className="text-sm">
-                <a href="#" className="font-medium text-blue-600 hover:text-blue-500">
+                <a href="#" className="font-medium text-indigo-600 hover:text-indigo-500 transition duration-150 ease-in-out">
                   Esqueceu sua senha?
                 </a>
               </div>
@@ -165,11 +174,11 @@ const Login: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isSubmitting ? (
                   <>
-                    <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" />
+                    <Loader2 className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" />
                     Entrando...
                   </>
                 ) : (
@@ -178,6 +187,10 @@ const Login: React.FC = () => {
               </button>
             </div>
           </form>
+
+          <div className="mt-6 text-center text-sm text-gray-500">
+            <p>Não tem uma conta? <a href="#" className="font-medium text-indigo-600 hover:text-indigo-500">Solicite acesso</a></p>
+          </div>
         </div>
       </div>
     </div>

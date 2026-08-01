@@ -2,11 +2,13 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using FinanceSap.Api.Extensions;
 using FinanceSap.Application.Queries.GetAccountBalance;
+using FinanceSap.Application.Queries.GetAccountByCustomer;
 using FinanceSap.Application.Queries.GetAccountStatement;
 using FinanceSap.Application.UseCases.Deposit;
 using FinanceSap.Application.UseCases.Transfer;
 using FinanceSap.Application.UseCases.Withdraw;
 using FinanceSap.Domain.Common;
+using FinanceSap.Domain.Entities;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -108,6 +110,21 @@ public sealed class AccountsController(IMediator mediator) : ControllerBase
         if (userId is null) return Unauthorized(new { message = "Token inválido." });
 
         var result = await mediator.Send(new GetAccountStatementQuery(id, userId.Value, page, pageSize));
+        if (!result.IsSuccess) return MapError(result.Error!, result.ErrorType);
+
+        return Ok(result.Value);
+    }
+
+    // GET /api/accounts/primary
+    [HttpGet("primary")]
+    [ProducesResponseType(typeof(Account), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetPrimaryAccount()
+    {
+        var userId = ExtractUserId();
+        if (userId is null) return Unauthorized(new { message = "Token inválido." });
+
+        var result = await mediator.Send(new GetAccountByCustomerQuery(userId.Value));
         if (!result.IsSuccess) return MapError(result.Error!, result.ErrorType);
 
         return Ok(result.Value);

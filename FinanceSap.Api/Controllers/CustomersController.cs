@@ -64,6 +64,28 @@ public sealed class CustomersController(
         return customer is null ? NotFound() : Ok(customer);
     }
 
+    // GET /api/customers/me
+    [HttpGet("me")]
+    [Authorize]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetCurrentCustomer(CancellationToken ct)
+    {
+        var userId = GetUserId();
+        if (userId is null) return Unauthorized();
+
+        // Get customerId from claims
+        var customerIdClaim = User.FindFirst("customerId")?.Value;
+        if (customerIdClaim == null || !Guid.TryParse(customerIdClaim, out var customerId))
+        {
+            return NotFound();
+        }
+
+        var customer = await mediator.Send(new GetCustomerByIdQuery(customerId, userId.Value), ct);
+        return customer is null ? NotFound() : Ok(customer);
+    }
+
     private Guid? GetUserId()
     {
         var claim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value

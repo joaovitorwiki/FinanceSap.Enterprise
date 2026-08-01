@@ -67,3 +67,49 @@ export interface StoredAuthTokens {
 export interface StoredAuthData extends StoredAuthTokens {
   user: User;
 }
+
+/**
+ * Represents a customer in the system.
+ */
+export interface Customer {
+  id: string;
+  name: string;
+  document: string;
+  email: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Represents a bank account in the system.
+ */
+export interface Account {
+  id: string;
+  accountNumber: string;
+  balance: number;
+  customerId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Request payload for deposit and withdraw operations.
+ */
+export interface MoneyRequest {
+  amount: number;
+}
+
+/**
+ * Request payload for transfer operations.
+ */
+export interface TransferRequest {
+  destinationAccountId: string;
+  amount: number;
+}
+
+/**
+ * Response from account balance endpoint.
+ */
+export interface AccountBalanceResponse {
+  balance: number;
+}
