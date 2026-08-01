@@ -14,6 +14,8 @@ import ProtectedRoute from './components/ProtectedRoute';
 import AuthLayout from './components/AuthLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Loans from './pages/Loans';
+import LoanApprovals from './pages/Admin/LoanApprovals';
 
 /**
  * Main application component with routing configuration.
@@ -34,7 +36,8 @@ const App: React.FC = () => {
           }>
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/transactions" element={<div>Transactions Page</div>} />
-            <Route path="/loans" element={<div>Loans Page</div>} />
+            <Route path="/loans" element={<Loans />} />
+            <Route path="/admin/loans" element={<LoanApprovals />} />
           </Route>
 
           {/* Catch-all route - redirect to dashboard */}

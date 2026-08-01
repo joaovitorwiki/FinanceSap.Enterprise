@@ -73,7 +73,7 @@ public sealed class RefreshTokenRepository(ApplicationDbContext context) : IRefr
     public async Task<List<RefreshToken>> FindActiveByUserIdAsync(Guid userId, CancellationToken cancellationToken = default)
     {
         return await _context.RefreshTokens
-            .Where(rt => rt.UserId == userId && rt.IsActive)
+            .Where(rt => rt.UserId == userId && rt.RevokedAt == null && rt.ExpiresAt > DateTime.UtcNow)
             .ToListAsync(cancellationToken);
     }
 
@@ -81,7 +81,7 @@ public sealed class RefreshTokenRepository(ApplicationDbContext context) : IRefr
     public async Task RevokeAllForUserAsync(Guid userId, string revokedByIp, string reason, CancellationToken cancellationToken = default)
     {
         var activeTokens = await _context.RefreshTokens
-            .Where(rt => rt.UserId == userId && rt.IsActive)
+            .Where(rt => rt.UserId == userId && rt.RevokedAt == null && rt.ExpiresAt > DateTime.UtcNow)
             .ToListAsync(cancellationToken);
 
         foreach (var token in activeTokens)
@@ -96,7 +96,7 @@ public sealed class RefreshTokenRepository(ApplicationDbContext context) : IRefr
     public async Task RemoveExpiredAsync(CancellationToken cancellationToken = default)
     {
         var expiredTokens = await _context.RefreshTokens
-            .Where(rt => !rt.IsActive && rt.ExpiresAt < DateTime.UtcNow)
+            .Where(rt => (rt.RevokedAt != null || rt.ExpiresAt <= DateTime.UtcNow) && rt.ExpiresAt < DateTime.UtcNow)
             .ToListAsync(cancellationToken);
 
         _context.RefreshTokens.RemoveRange(expiredTokens);

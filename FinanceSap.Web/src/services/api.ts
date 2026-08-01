@@ -10,10 +10,10 @@
 
 import axios, { AxiosError } from 'axios';
 import type { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
-import type { AuthResponse, ProblemDetails, RefreshRequest, StoredAuthData, User } from '../types';
+import type { AuthResponse, ProblemDetails, RefreshRequest, StoredAuthData, User, Loan, LoanRequest } from '../types';
 
 // Constants
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5153/api';
 const AUTH_STORAGE_KEY = 'financesap:auth';
 const REFRESH_ENDPOINT = '/auth/refresh';
 const LOGIN_ENDPOINT = '/auth/login';
@@ -200,6 +200,46 @@ export const getCurrentUser = (): User | null => {
 export const isAuthenticated = (): boolean => {
   const authData = getAuthData();
   return !!authData?.accessToken;
+};
+
+/**
+ * Gets the current user's loans.
+ */
+export const getMyLoans = async (): Promise<Loan[]> => {
+  const response = await api.get<Loan[]>('/loans/my-loans');
+  return response.data;
+};
+
+/**
+ * Requests a new loan.
+ */
+export const requestLoan = async (loanData: LoanRequest): Promise<Loan> => {
+  const response = await api.post<Loan>('/loans/request', loanData);
+  return response.data;
+};
+
+/**
+ * Gets all pending loans (for admin).
+ */
+export const getPendingLoans = async (): Promise<Loan[]> => {
+  const response = await api.get<Loan[]>('/loans/pending');
+  return response.data;
+};
+
+/**
+ * Approves a loan.
+ */
+export const approveLoan = async (loanId: string): Promise<Loan> => {
+  const response = await api.post<Loan>(`/loans/${loanId}/approve`);
+  return response.data;
+};
+
+/**
+ * Rejects a loan.
+ */
+export const rejectLoan = async (loanId: string, reason?: string): Promise<Loan> => {
+  const response = await api.post<Loan>(`/loans/${loanId}/reject`, { reason });
+  return response.data;
 };
 
 export default api;

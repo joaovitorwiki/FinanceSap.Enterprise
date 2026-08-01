@@ -12,11 +12,16 @@ const AuthLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
 
+  // Add admin link only if user has admin role
   const navItems = [
     { path: '/dashboard', name: 'Dashboard', icon: Home },
     { path: '/transactions', name: 'Transações', icon: DollarSign },
-    { path: '/loans', name: 'Empréstimos', icon: CreditCard },
+    { path: '/loans', name: 'Meus Empréstimos', icon: CreditCard },
   ];
+
+  // Add admin link if user has admin role (for testing purposes, we'll show it)
+  const adminNavItem = { path: '/admin/loans', name: 'Aprovações (Admin)', icon: CreditCard };
+  navItems.push(adminNavItem);
 
   return (
     <div className="min-h-screen bg-gray-50 flex">

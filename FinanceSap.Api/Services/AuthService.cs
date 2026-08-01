@@ -84,13 +84,13 @@ public sealed class AuthService(
     }
 
     /// <inheritdoc />
-    public async Task<AuthResult> RefreshTokenAsync(string token, string ipAddress)
-    {
-        var refreshToken = await _refreshTokenRepository.FindByTokenAsync(token);
-        if (refreshToken is null || !refreshToken.IsActive)
-        {
-            return new AuthResult(false, "Refresh token inválido ou expirado", null, null);
-        }
+     public async Task<AuthResult> RefreshTokenAsync(string token, string ipAddress)
+     {
+         var refreshToken = await _refreshTokenRepository.FindByTokenAsync(token);
+         if (refreshToken is null || refreshToken.RevokedAt != null || refreshToken.ExpiresAt <= DateTime.UtcNow)
+         {
+             return new AuthResult(false, "Refresh token inválido ou expirado", null, null);
+         }
 
         var user = await _userManager.FindByIdAsync(refreshToken.UserId.ToString());
         if (user is null)
@@ -110,13 +110,13 @@ public sealed class AuthService(
     }
 
     /// <inheritdoc />
-    public async Task RevokeTokenAsync(string token, string ipAddress, string reason)
-    {
-        var refreshToken = await _refreshTokenRepository.FindByTokenAsync(token);
-        if (refreshToken is null || !refreshToken.IsActive)
-        {
-            return;
-        }
+     public async Task RevokeTokenAsync(string token, string ipAddress, string reason)
+     {
+         var refreshToken = await _refreshTokenRepository.FindByTokenAsync(token);
+         if (refreshToken is null || refreshToken.RevokedAt != null || refreshToken.ExpiresAt <= DateTime.UtcNow)
+         {
+             return;
+         }
 
         refreshToken.Revoke(ipAddress, reason);
         await _refreshTokenRepository.AddAsync(refreshToken);

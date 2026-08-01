@@ -12,6 +12,7 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  document: string;
   roles: string[];
 }
 
@@ -112,4 +113,28 @@ export interface TransferRequest {
  */
 export interface AccountBalanceResponse {
   balance: number;
+}
+
+/**
+ * Represents a loan in the system.
+ */
+export interface Loan {
+  id: string;
+  customerId: string;
+  customerName: string;
+  document: string;
+  amount: number;
+  installments: number;
+  status: 'Pending' | 'Approved' | 'Rejected' | 'Paid';
+  requestDate: string;
+  approvalDate?: string;
+  rejectionReason?: string;
+}
+
+/**
+ * Request payload for loan requests.
+ */
+export interface LoanRequest {
+  amount: number;
+  installments: number;
 }
