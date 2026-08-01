@@ -4,6 +4,7 @@ using FinanceSap.Api.Extensions;
 using FinanceSap.Application.Queries;
 using FinanceSap.Application.UseCases.CreateCustomer;
 using FinanceSap.Domain.Common;
+using FinanceSap.Domain.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -16,7 +17,8 @@ namespace FinanceSap.Api.Controllers;
 [Route("api/[controller]")]
 public sealed class CustomersController(
     CreateCustomerHandler handler,
-    IMediator mediator) : ControllerBase
+    IMediator mediator,
+    IUserContext userContext) : ControllerBase
 {
     [HttpPost]
     [EnableRateLimiting(ApiServiceExtensions.GlobalRateLimitPolicy)]
@@ -77,9 +79,17 @@ public sealed class CustomersController(
 
         // Get customerId from claims
         var customerIdClaim = User.FindFirst("customerId")?.Value;
+
+        // If customerId claim is missing or invalid, try to get it from user context
         if (customerIdClaim == null || !Guid.TryParse(customerIdClaim, out var customerId))
         {
-            return NotFound();
+            // Try to get customerId from user context (this handles cases where customerId is not in claims)
+            var ownerCustomerId = await userContext.GetCustomerIdByUserIdAsync(userId.Value, ct);
+            if (ownerCustomerId is null)
+            {
+                return NotFound();
+            }
+            customerId = ownerCustomerId.Value;
         }
 
         var customer = await mediator.Send(new GetCustomerByIdQuery(customerId, userId.Value), ct);

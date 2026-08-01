@@ -37,14 +37,43 @@ const Dashboard: React.FC = () => {
       setIsLoading(true);
       setError(null);
 
-      // Fetch customer and account data in parallel
-      const [customerResponse, accountResponse] = await Promise.all([
-        api.get<Customer>('/api/customers/me'),
-        api.get<Account>('/api/accounts/primary')
-      ]);
+        // Fetch customer and account data in parallel
+        const [customerResponse, accountResponse] = await Promise.all([
+          api.get<Customer>('/customers/me'),
+          api.get<Account>('/accounts/primary')
+        ]);
 
-      setCustomer(customerResponse.data);
-      setAccount(accountResponse.data);
+        console.log('Customer data:', customerResponse.data);
+        console.log('Account data:', accountResponse.data);
+
+        // Process customer data to handle potential object properties and field name mismatches
+        const rawCustomer = customerResponse.data;
+        const rawCustomerAny = rawCustomer as any; // Type assertion to access dynamic properties
+
+        const processedCustomer: Customer = {
+          ...rawCustomer,
+          // Handle case where document is an object { value: string } instead of string
+          document: typeof rawCustomer.document === 'object' && rawCustomer.document !== null
+            ? (rawCustomer.document as { value: string }).value
+            : rawCustomer.document,
+          // Map fullName to name if it exists (fallback to name, then default)
+          name: rawCustomerAny.fullName || rawCustomer.name || 'Não informado',
+          // Ensure email is also processed in case it comes as an object
+          email: typeof rawCustomer.email === 'object' && rawCustomer.email !== null
+            ? (rawCustomer.email as { value: string }).value
+            : rawCustomer.email
+        };
+
+        // Check if account data has a value property (object with { value: ... })
+        if (accountResponse.data && typeof accountResponse.data === 'object' && 'value' in accountResponse.data) {
+          // Handle case where backend returns { value: Account }
+          setCustomer(processedCustomer);
+          setAccount((accountResponse.data as { value: Account }).value);
+        } else {
+          // Handle normal case where backend returns Account directly
+          setCustomer(processedCustomer);
+          setAccount(accountResponse.data);
+        }
     } catch (err: unknown) {
       console.error('Error fetching data:', err);
       setError(handleApiError(err));
@@ -105,7 +134,7 @@ const Dashboard: React.FC = () => {
             </div>
             <div className="ml-3">
               <h3 className="text-sm font-medium text-yellow-800">Dados não encontrados</h3>
-              <p className="text-sm text-yellow-700 mt-1">Não foi possível carregar as informações do cliente.</p>
+              <p className="text-sm text-yellow-700 mt-1">Não foi possível carregar as informações do cliente ou da conta.</p>
             </div>
           </div>
         </div>
@@ -138,9 +167,9 @@ const Dashboard: React.FC = () => {
                 <div>
                   <p className="text-sm font-medium opacity-90">Saldo Atual</p>
                   <p className="text-4xl font-bold mt-2">
-                    {account.balance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    {(account?.balance ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </p>
-                  <p className="text-sm mt-1 opacity-80">Conta: {account.accountNumber}</p>
+                  <p className="text-sm mt-1 opacity-80">Conta: {account?.accountNumber ?? 'N/A'}</p>
                 </div>
                 <div className="bg-white bg-opacity-10 rounded-lg p-3">
                   <CreditCard className="h-8 w-8 text-white" />
@@ -183,15 +212,15 @@ const Dashboard: React.FC = () => {
             <div className="space-y-4">
               <div>
                 <p className="text-sm font-medium text-gray-500">Nome Completo</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{customer.name}</p>
+                <p className="text-sm font-medium text-gray-900 mt-1">{customer?.name ?? 'Não informado'}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-500">Documento</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{customer.document}</p>
+                <p className="text-sm font-medium text-gray-900 mt-1">{customer?.document ?? 'Não informado'}</p>
               </div>
               <div>
                 <p className="text-sm font-medium text-gray-500">Email</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{customer.email}</p>
+                <p className="text-sm font-medium text-gray-900 mt-1">{customer?.email ?? 'Não informado'}</p>
               </div>
             </div>
           </div>
@@ -202,23 +231,23 @@ const Dashboard: React.FC = () => {
           isOpen={isDepositModalOpen}
           onClose={() => setIsDepositModalOpen(false)}
           onSuccess={handleTransactionSuccess}
-          accountId={account.id}
+          accountId={account?.id ?? ''}
         />
 
         <WithdrawModal
           isOpen={isWithdrawModalOpen}
           onClose={() => setIsWithdrawModalOpen(false)}
           onSuccess={handleTransactionSuccess}
-          accountId={account.id}
-          currentBalance={account.balance}
+          accountId={account?.id ?? ''}
+          currentBalance={account?.balance ?? 0}
         />
 
         <TransferModal
           isOpen={isTransferModalOpen}
           onClose={() => setIsTransferModalOpen(false)}
           onSuccess={handleTransactionSuccess}
-          accountId={account.id}
-          currentBalance={account.balance}
+          accountId={account?.id ?? ''}
+          currentBalance={account?.balance ?? 0}
         />
       </div>
     </div>
