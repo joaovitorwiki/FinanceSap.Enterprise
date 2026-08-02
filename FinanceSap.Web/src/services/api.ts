@@ -18,7 +18,9 @@ import type {
   User,
   Loan,
   LoanRequest,
-  TransactionStatementResult
+  TransactionStatementResult,
+  Transaction,
+  RecentTransactionsResponse
 } from '../types';
 
 // Constants
@@ -255,6 +257,14 @@ export const rejectLoan = async (loanId: string, reason?: string): Promise<void>
 export const getTransactions = async (): Promise<TransactionStatementResult> => {
   const response = await api.get<TransactionStatementResult>('/transactions');
   return response.data;
+};
+
+/**
+ * Gets the recent transactions for the authenticated user.
+ */
+export const getRecentTransactions = async (): Promise<Transaction[]> => {
+  const response = await api.get<RecentTransactionsResponse>('/transactions/recent');
+  return response.data.transactions;
 };
 
 export default api;

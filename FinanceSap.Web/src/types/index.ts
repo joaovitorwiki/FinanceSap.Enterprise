@@ -138,3 +138,39 @@ export interface LoanRequest {
   amount: number;
   installments: number;
 }
+
+/**
+ * Transaction type for the dashboard and transaction history.
+ */
+export type TransactionType = 'Credit' | 'Debit';
+
+/**
+ * Represents a financial transaction in the system.
+ */
+export interface Transaction {
+  id: string;
+  amount: number;
+  type: TransactionType;
+  description: string;
+  date: string;
+  accountId: string;
+}
+
+/**
+ * Response from the account statement endpoint.
+ */
+export interface TransactionStatementResult {
+  accountId: string;
+  balance: number;
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  transactions: Transaction[];
+}
+
+/**
+ * Response from the recent transactions endpoint.
+ */
+export interface RecentTransactionsResponse {
+  transactions: Transaction[];
+}

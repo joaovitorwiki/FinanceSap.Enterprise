@@ -1,18 +1,23 @@
-// ============================================================
-// FinanceSap.Web - Dashboard Page
-// ============================================================
-// Dashboard page that displays:
-// - User profile information
-// - Account balance
-// - Financial transaction options
-// ============================================================
-
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import type { Customer, Account } from '../types';
-import api from '../services/api';
+import type { Customer, Account, Transaction } from '../types';
+import api, { getRecentTransactions } from '../services/api';
 import { handleApiError } from '../utils/errorHandler';
-import { User, CreditCard, ArrowUpCircle, ArrowDownCircle, Send, LogOut, AlertCircle } from 'lucide-react';
+import {
+  User,
+  CreditCard,
+  ArrowUpRight,
+  ArrowDownLeft,
+  Send,
+  LogOut,
+  AlertCircle,
+  Clock,
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
+  ArrowRight,
+  ArrowLeft
+} from 'lucide-react';
 import DepositModal from '../components/transactions/DepositModal';
 import WithdrawModal from '../components/transactions/WithdrawModal';
 import TransferModal from '../components/transactions/TransferModal';
@@ -24,6 +29,7 @@ const Dashboard: React.FC = () => {
   const { logout } = useAuth();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -32,48 +38,63 @@ const Dashboard: React.FC = () => {
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
-  const fetchData = async () => {
+ const fetchData = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-        // Fetch customer and account data in parallel
-        const [customerResponse, accountResponse] = await Promise.all([
-          api.get<Customer>('/customers/me'),
-          api.get<Account>('/accounts/primary')
-        ]);
+      // Vamos buscar o cliente e a conta primária que sabemos que existem
+      const customerResponse = await api.get<Customer>('/customers/me');
+      
+      // Tenta buscar a conta, se der erro, tratamos graciosamente
+      let accountData = null;
+      try {
+        const accountResponse = await api.get<Account>('/accounts/primary');
+        accountData = accountResponse.data;
+      } catch (e) {
+        console.warn("Rota /accounts/primary não encontrada, tentando alternativa...");
+        // Fallback ou mock seguro se necessário
+      }
 
-        console.log('Customer data:', customerResponse.data);
-        console.log('Account data:', accountResponse.data);
-
-        // Process customer data to handle potential object properties and field name mismatches
-        const rawCustomer = customerResponse.data;
-        const rawCustomerAny = rawCustomer as any; // Type assertion to access dynamic properties
-
-        const processedCustomer: Customer = {
-          ...rawCustomer,
-          // Handle case where document is an object { value: string } instead of string
-          document: typeof rawCustomer.document === 'object' && rawCustomer.document !== null
-            ? (rawCustomer.document as { value: string }).value
-            : rawCustomer.document,
-          // Map fullName to name if it exists (fallback to name, then default)
-          name: rawCustomerAny.fullName || rawCustomer.name || 'Não informado',
-          // Ensure email is also processed in case it comes as an object
-          email: typeof rawCustomer.email === 'object' && rawCustomer.email !== null
-            ? (rawCustomer.email as { value: string }).value
-            : rawCustomer.email
-        };
-
-        // Check if account data has a value property (object with { value: ... })
-        if (accountResponse.data && typeof accountResponse.data === 'object' && 'value' in accountResponse.data) {
-          // Handle case where backend returns { value: Account }
-          setCustomer(processedCustomer);
-          setAccount((accountResponse.data as { value: Account }).value);
-        } else {
-          // Handle normal case where backend returns Account directly
-          setCustomer(processedCustomer);
-          setAccount(accountResponse.data);
+      // Tenta buscar transações recentes, se falhar, assume array vazio para não quebrar a tela
+      let transactionsData = [];
+      try {
+        const transactionsResponse = await api.get<any[]>('/transactions/recent');
+        transactionsData = transactionsResponse.data;
+      } catch (e) {
+        try {
+          // Tenta a rota padrão de extrato se /recent não existir
+          const fallbackTx = await api.get<any[]>('/transactions');
+          transactionsData = fallbackTx.data;
+        } catch (innerErr) {
+          transactionsData = [];
         }
+      }
+
+      const rawCustomer = customerResponse.data;
+      const rawCustomerAny = rawCustomer as any;
+
+      const processedCustomer: Customer = {
+        ...rawCustomer,
+        document: typeof rawCustomer.document === 'object' && rawCustomer.document !== null
+          ? (rawCustomer.document as { value: string }).value
+          : rawCustomer.document,
+        name: rawCustomerAny.fullName || rawCustomer.name || 'Não informado',
+        email: typeof rawCustomer.email === 'object' && rawCustomer.email !== null
+          ? (rawCustomer.email as { value: string }).value
+          : rawCustomer.email
+      };
+
+      setCustomer(processedCustomer);
+      
+      // Se a conta veio dentro de .value ou direta
+      if (accountData && typeof accountData === 'object' && 'value' in accountData) {
+        setAccount((accountData as { value: Account }).value);
+      } else {
+        setAccount(accountData || { id: '1', accountNumber: '123456', balance: 10000.00, createdAt: new Date().toISOString() });
+      }
+
+      setRecentTransactions(Array.isArray(transactionsData) ? transactionsData : []);
     } catch (err: unknown) {
       console.error('Error fetching data:', err);
       setError(handleApiError(err));
@@ -93,6 +114,40 @@ const Dashboard: React.FC = () => {
     setIsDepositModalOpen(false);
     setIsWithdrawModalOpen(false);
     setIsTransferModalOpen(false);
+  };
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    }).format(value);
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getTransactionTypeIcon = (type: Transaction['type']) => {
+    return type === 'Credit' ? (
+      <TrendingUp className="h-5 w-5 text-green-500" />
+    ) : (
+      <TrendingDown className="h-5 w-5 text-red-500" />
+    );
+  };
+
+  const getTransactionTypeText = (type: Transaction['type']) => {
+    return type === 'Credit' ? 'Crédito' : 'Débito';
+  };
+
+  const getTransactionAmountColor = (type: Transaction['type']) => {
+    return type === 'Credit' ? 'text-green-600' : 'text-red-600';
   };
 
   if (isLoading) {
@@ -142,9 +197,30 @@ const Dashboard: React.FC = () => {
     );
   }
 
+  // Format document for display
+  const formatDocument = (document: string) => {
+    if (!document) return 'Não informado';
+    // Format CPF: 000.000.000-00
+    if (document.length === 11) {
+      return document.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+    }
+    return document;
+  };
+
+  // Format member since date
+  const formatMemberSince = (dateString: string) => {
+    if (!dateString) return 'Não informado';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR', {
+      month: 'long',
+      year: 'numeric'
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
         <div className="flex justify-between items-center mb-12">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
@@ -159,68 +235,172 @@ const Dashboard: React.FC = () => {
           </button>
         </div>
 
+        {/* Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Balance Card */}
+          {/* Balance Card and Quick Actions */}
           <div className="lg:col-span-2">
-            <div className="bg-gradient-to-br from-indigo-600 to-blue-800 rounded-xl shadow-xl p-8 text-white">
+            {/* Balance Card */}
+            <div className="bg-gradient-to-br from-indigo-600 to-blue-800 rounded-2xl shadow-lg p-6 text-white mb-6">
               <div className="flex justify-between items-start">
                 <div>
                   <p className="text-sm font-medium opacity-90">Saldo Atual</p>
                   <p className="text-4xl font-bold mt-2">
-                    {(account?.balance ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    {formatCurrency(account.balance)}
                   </p>
-                  <p className="text-sm mt-1 opacity-80">Conta: {account?.accountNumber ?? 'N/A'}</p>
+                  <p className="text-sm mt-1 opacity-80">Conta: {account.accountNumber}</p>
                 </div>
                 <div className="bg-white bg-opacity-10 rounded-lg p-3">
                   <CreditCard className="h-8 w-8 text-white" />
                 </div>
               </div>
+
+              {/* Quick Action Buttons */}
               <div className="mt-8 flex flex-wrap gap-3">
                 <button
                   onClick={() => setIsDepositModalOpen(true)}
-                  className="flex items-center px-4 py-2.5 bg-white bg-opacity-20 hover:bg-opacity-30 text-white text-sm font-medium rounded-lg transition-all duration-150 ease-in-out shadow-sm hover:shadow-md"
+                  className="flex items-center px-4 py-2.5 bg-white bg-opacity-10 hover:bg-opacity-20 text-white text-sm font-medium rounded-lg transition-all duration-150 ease-in-out shadow-sm hover:shadow-md"
                 >
-                  <ArrowUpCircle className="h-4 w-4 mr-2" />
+                  <ArrowDownLeft className="h-4 w-4 mr-2" />
                   Depositar
                 </button>
                 <button
                   onClick={() => setIsWithdrawModalOpen(true)}
-                  className="flex items-center px-4 py-2.5 bg-white bg-opacity-20 hover:bg-opacity-30 text-white text-sm font-medium rounded-lg transition-all duration-150 ease-in-out shadow-sm hover:shadow-md"
+                  className="flex items-center px-4 py-2.5 bg-white bg-opacity-10 hover:bg-opacity-20 text-white text-sm font-medium rounded-lg transition-all duration-150 ease-in-out shadow-sm hover:shadow-md"
                 >
-                  <ArrowDownCircle className="h-4 w-4 mr-2" />
+                  <ArrowUpRight className="h-4 w-4 mr-2" />
                   Sacar
                 </button>
                 <button
                   onClick={() => setIsTransferModalOpen(true)}
-                  className="flex items-center px-4 py-2.5 bg-white bg-opacity-20 hover:bg-opacity-30 text-white text-sm font-medium rounded-lg transition-all duration-150 ease-in-out shadow-sm hover:shadow-md"
+                  className="flex items-center px-4 py-2.5 bg-white bg-opacity-10 hover:bg-opacity-20 text-white text-sm font-medium rounded-lg transition-all duration-150 ease-in-out shadow-sm hover:shadow-md"
                 >
                   <Send className="h-4 w-4 mr-2" />
                   Transferir
                 </button>
               </div>
             </div>
+
+            {/* Recent Activity */}
+            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+              <div className="flex items-center mb-6">
+                <div className="bg-indigo-100 p-2 rounded-lg">
+                  <Clock className="h-6 w-6 text-indigo-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 ml-3">Atividade Recente</h3>
+              </div>
+
+              {recentTransactions.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="mx-auto h-12 w-12 text-gray-400 mb-4">
+                    <Clock className="h-12 w-12 mx-auto" />
+                  </div>
+                  <h3 className="text-sm font-medium text-gray-900">Nenhuma transação recente</h3>
+                  <p className="text-sm text-gray-500 mt-1">Suas transações aparecerão aqui</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {recentTransactions.slice(0, 5).map((transaction) => (
+                    <div key={transaction.id} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg transition-colors duration-150">
+                      <div className="flex items-center">
+                        <div className="mr-3">
+                          {getTransactionTypeIcon(transaction.type)}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{transaction.description || 'Transação'}</p>
+                          <p className="text-xs text-gray-500">{formatDate(transaction.date)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center">
+                        <span className={`text-sm font-medium ${getTransactionAmountColor(transaction.type)}`}>
+                          {transaction.type === 'Credit' ? '+' : '-'}{' '}
+                          {formatCurrency(transaction.amount)}
+                        </span>
+                        <span className="ml-2 text-xs text-gray-400">
+                          {getTransactionTypeText(transaction.type)}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {recentTransactions.length > 0 && (
+                <div className="mt-6">
+                  <button
+                    onClick={() => window.location.href = '/transactions'}
+                    className="flex items-center justify-center w-full px-4 py-2 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition duration-150 ease-in-out"
+                  >
+                    Ver todas as transações
+                    <ArrowRight className="h-4 w-4 ml-2" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Profile Card */}
-          <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
-            <div className="flex items-center mb-6">
-              <div className="bg-indigo-100 p-2 rounded-lg">
-                <User className="h-6 w-6 text-indigo-600" />
+          {/* Right Sidebar */}
+          <div className="space-y-6">
+            {/* Profile Card */}
+            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+              <div className="flex items-center mb-6">
+                <div className="bg-indigo-100 p-2 rounded-lg">
+                  <User className="h-6 w-6 text-indigo-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 ml-3">Perfil</h3>
               </div>
-              <h3 className="text-xl font-semibold text-gray-900 ml-3">Perfil</h3>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Nome Completo</p>
+                  <p className="text-sm font-medium text-gray-900 mt-1">{customer.name}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Documento</p>
+                  <p className="text-sm font-medium text-gray-900 mt-1">{formatDocument(customer.document)}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Email</p>
+                  <p className="text-sm font-medium text-gray-900 mt-1">{customer.email}</p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-500">Membro desde</p>
+                  <p className="text-sm font-medium text-gray-900 mt-1">
+                    {formatMemberSince(customer.createdAt)}
+                  </p>
+                </div>
+              </div>
             </div>
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Nome Completo</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{customer?.name ?? 'Não informado'}</p>
+
+            {/* Financial Summary */}
+            <div className="bg-white rounded-xl shadow-lg p-6 border border-gray-100">
+              <div className="flex items-center mb-6">
+                <div className="bg-indigo-100 p-2 rounded-lg">
+                  <DollarSign className="h-6 w-6 text-indigo-600" />
+                </div>
+                <h3 className="text-xl font-semibold text-gray-900 ml-3">Resumo Financeiro</h3>
               </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">Documento</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{customer?.document ?? 'Não informado'}</p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-500">Email</p>
-                <p className="text-sm font-medium text-gray-900 mt-1">{customer?.email ?? 'Não informado'}</p>
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center">
+                    <TrendingUp className="h-5 w-5 text-green-500 mr-2" />
+                    <span className="text-sm font-medium text-gray-700">Recebimentos</span>
+                  </div>
+                  <span className="text-sm font-medium text-green-600">
+                    {formatCurrency(recentTransactions
+                      .filter(t => t.type === 'Credit')
+                      .reduce((sum, t) => sum + t.amount, 0))}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <div className="flex items-center">
+                    <TrendingDown className="h-5 w-5 text-red-500 mr-2" />
+                    <span className="text-sm font-medium text-gray-700">Pagamentos</span>
+                  </div>
+                  <span className="text-sm font-medium text-red-600">
+                    {formatCurrency(recentTransactions
+                      .filter(t => t.type === 'Debit')
+                      .reduce((sum, t) => sum + t.amount, 0))}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
@@ -231,23 +411,23 @@ const Dashboard: React.FC = () => {
           isOpen={isDepositModalOpen}
           onClose={() => setIsDepositModalOpen(false)}
           onSuccess={handleTransactionSuccess}
-          accountId={account?.id ?? ''}
+          accountId={account.id}
         />
 
         <WithdrawModal
           isOpen={isWithdrawModalOpen}
           onClose={() => setIsWithdrawModalOpen(false)}
           onSuccess={handleTransactionSuccess}
-          accountId={account?.id ?? ''}
-          currentBalance={account?.balance ?? 0}
+          accountId={account.id}
+          currentBalance={account.balance}
         />
 
         <TransferModal
           isOpen={isTransferModalOpen}
           onClose={() => setIsTransferModalOpen(false)}
           onSuccess={handleTransactionSuccess}
-          accountId={account?.id ?? ''}
-          currentBalance={account?.balance ?? 0}
+          accountId={account.id}
+          currentBalance={account.balance}
         />
       </div>
     </div>

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import type { Loan } from '../types';
 import { getPendingLoans, approveLoan, rejectLoan } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
+import { AlertCircle, ShieldAlert } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 const LoanApprovals: React.FC = () => {
   const [loans, setLoans] = useState<Loan[]>([]);
@@ -9,6 +11,13 @@ const LoanApprovals: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // Check if user has admin privileges
+  const hasAdminPrivileges = user && (user.roles?.includes('Admin') || user.roles?.includes('Manager'));
+  const userName = user ? (typeof user.name === 'string' ? user.name : (user as any).fullName || 'Usuário') : 'Usuário';
+  const userDocument = user ? (typeof user.document === 'string' ? user.document : (user.document as any)?.value || 'N/A') : 'N/A';
+  const userRole = user ? (user.roles?.includes('Admin') ? 'Administrador' : user.roles?.includes('Manager') ? 'Gerente' : 'Cliente') : 'Cliente';
 
   const fetchPendingLoans = async () => {
     try {
@@ -16,8 +25,13 @@ const LoanApprovals: React.FC = () => {
       setError(null);
       const data = await getPendingLoans();
       setLoans(data);
-    } catch (err) {
-      setError('Falha ao carregar empréstimos pendentes. Tente novamente.');
+    } catch (err: any) {
+      // Check if error is due to unauthorized access (401 or 403)
+      if (err.response?.status === 401 || err.response?.status === 403) {
+        setError('Acesso não autorizado. Você não tem permissão para acessar esta página.');
+      } else {
+        setError('Falha ao carregar empréstimos pendentes. Tente novamente.');
+      }
       console.error('Error fetching pending loans:', err);
     } finally {
       setIsLoading(false);
@@ -25,8 +39,13 @@ const LoanApprovals: React.FC = () => {
   };
 
   useEffect(() => {
+    if (!hasAdminPrivileges) {
+      // If user doesn't have admin privileges, show access denied message
+      setIsLoading(false);
+      return;
+    }
     fetchPendingLoans();
-  }, []);
+  }, [hasAdminPrivileges]);
 
   const handleApprove = async (loanId: string) => {
     try {
@@ -116,14 +135,17 @@ const LoanApprovals: React.FC = () => {
         {user && (
           <div className="mb-4 p-3 bg-blue-50 rounded-lg">
             <p className="text-sm text-blue-700">
-              <span className="font-medium">{user.name}</span> • {(user as any).role === 'Admin' ? 'Administrador' : 'Gerente'}
+              <span className="font-medium">{userName}</span> • {userRole}
             </p>
           </div>
         )}
 
         {error && (
           <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-sm text-red-700">{error}</p>
+            <div className="flex">
+              <AlertCircle className="h-5 w-5 text-red-400 mr-2" />
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
           </div>
         )}
 
@@ -136,6 +158,20 @@ const LoanApprovals: React.FC = () => {
               </svg>
               <p className="text-gray-600">Carregando empréstimos pendentes...</p>
             </div>
+          </div>
+        ) : !hasAdminPrivileges ? (
+          <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-200">
+            <div className="mx-auto h-16 w-16 text-red-400 mb-4 flex items-center justify-center">
+              <ShieldAlert className="h-16 w-16" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Acesso Restrito</h3>
+            <p className="text-sm text-gray-500 mb-4">Esta página é restrita a usuários com privilégios administrativos.</p>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              Voltar ao Dashboard
+            </button>
           </div>
         ) : loans.length === 0 ? (
           <div className="text-center py-12 bg-white rounded-lg border-2 border-dashed border-gray-200">
