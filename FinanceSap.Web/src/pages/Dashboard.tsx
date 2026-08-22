@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import type { Customer, Account, Transaction } from '../types';
-import api, { getRecentTransactions } from '../services/api';
-import { handleApiError } from '../utils/errorHandler';
+import api from '../services/api';
 import {
   User,
   CreditCard,
@@ -15,8 +14,7 @@ import {
   DollarSign,
   TrendingUp,
   TrendingDown,
-  ArrowRight,
-  ArrowLeft
+  ArrowRight
 } from 'lucide-react';
 import DepositModal from '../components/transactions/DepositModal';
 import WithdrawModal from '../components/transactions/WithdrawModal';
@@ -26,7 +24,7 @@ import TransferModal from '../components/transactions/TransferModal';
  * Dashboard page component.
  */
 const Dashboard: React.FC = () => {
-  const { logout } = useAuth();
+  const { logout, user: authUser } = useAuth();
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [account, setAccount] = useState<Account | null>(null);
   const [recentTransactions, setRecentTransactions] = useState<Transaction[]>([]);
@@ -38,66 +36,87 @@ const Dashboard: React.FC = () => {
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
 
- const fetchData = async () => {
+  const fetchData = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      // Vamos buscar o cliente e a conta primária que sabemos que existem
-      const customerResponse = await api.get<Customer>('/customers/me');
-      
-      // Tenta buscar a conta, se der erro, tratamos graciosamente
-      let accountData = null;
+      // /customers/me may 404 for admin users — fall back to auth context user
+      let customerData: Customer | null = null;
       try {
-        const accountResponse = await api.get<Account>('/accounts/primary');
-        accountData = accountResponse.data;
-      } catch (e) {
-        console.warn("Rota /accounts/primary não encontrada, tentando alternativa...");
-        // Fallback ou mock seguro se necessário
+        const customerResponse = await api.get<Customer>('/customers/me');
+        const raw = customerResponse.data as any;
+        customerData = {
+          ...customerResponse.data,
+          name: raw.fullName || customerResponse.data.name || authUser?.name || 'Não informado',
+          document: typeof raw.document === 'object' && raw.document !== null
+            ? (raw.document as { value: string }).value
+            : raw.document,
+          email: typeof raw.email === 'object' && raw.email !== null
+            ? (raw.email as { value: string }).value
+            : raw.email,
+        };
+      } catch {
+        if (authUser) {
+          customerData = {
+            id: authUser.id,
+            name: authUser.name,
+            email: authUser.email,
+            document: authUser.document ?? '',
+            createdAt: '',
+            updatedAt: '',
+          };
+        }
       }
 
-      // Tenta buscar transações recentes, se falhar, assume array vazio para não quebrar a tela
-      let transactionsData = [];
+      // Fetch primary account
+      let accountData: Account | null = null;
       try {
-        const transactionsResponse = await api.get<any[]>('/transactions/recent');
-        transactionsData = transactionsResponse.data;
-      } catch (e) {
+        const accountResponse = await api.get<Account>('/accounts/primary');
+        const raw = accountResponse.data as any;
+        accountData = 'value' in raw ? raw.value : raw;
+      } catch {
+        accountData = {
+          id: '0',
+          customerId: customerData?.id ?? '0',
+          accountNumber: '—',
+          balance: 0,
+          createdAt: '',
+          updatedAt: '',
+        };
+      }
+
+      // Fetch recent transactions
+      let transactionsData: Transaction[] = [];
+      try {
+        const txResponse = await api.get<any>('/transactions/recent');
+        const payload = txResponse.data;
+        transactionsData = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.transactions)
+            ? payload.transactions
+            : [];
+      } catch {
         try {
-          // Tenta a rota padrão de extrato se /recent não existir
-          const fallbackTx = await api.get<any[]>('/transactions');
-          transactionsData = fallbackTx.data;
-        } catch (innerErr) {
+          const txResponse = await api.get<any>('/transactions');
+          const payload = txResponse.data;
+          transactionsData = Array.isArray(payload)
+            ? payload
+            : Array.isArray(payload?.transactions)
+              ? payload.transactions
+              : [];
+        } catch {
           transactionsData = [];
         }
       }
 
-      const rawCustomer = customerResponse.data;
-      const rawCustomerAny = rawCustomer as any;
-
-      const processedCustomer: Customer = {
-        ...rawCustomer,
-        document: typeof rawCustomer.document === 'object' && rawCustomer.document !== null
-          ? (rawCustomer.document as { value: string }).value
-          : rawCustomer.document,
-        name: rawCustomerAny.fullName || rawCustomer.name || 'Não informado',
-        email: typeof rawCustomer.email === 'object' && rawCustomer.email !== null
-          ? (rawCustomer.email as { value: string }).value
-          : rawCustomer.email
-      };
-
-      setCustomer(processedCustomer);
-      
-      // Se a conta veio dentro de .value ou direta
-      if (accountData && typeof accountData === 'object' && 'value' in accountData) {
-        setAccount((accountData as { value: Account }).value);
-      } else {
-        setAccount(accountData || { id: '1', accountNumber: '123456', balance: 10000.00, createdAt: new Date().toISOString() });
-      }
-
-      setRecentTransactions(Array.isArray(transactionsData) ? transactionsData : []);
+      setCustomer(customerData);
+      setAccount(accountData);
+      setRecentTransactions(transactionsData);
     } catch (err: unknown) {
-      console.error('Error fetching data:', err);
-      setError(handleApiError(err));
+      console.error('Error fetching dashboard data:', err);
+      // Only set error for truly unexpected failures — not 404s on optional endpoints
+      setError('Não foi possível carregar os dados. Tente novamente.');
     } finally {
       setIsLoading(false);
     }
@@ -161,14 +180,13 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  if (error) {
+  // customer/account always have fallback values — only block render on a true unexpected error
+  if (error && !customer && !account) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
         <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded-lg shadow-sm">
           <div className="flex">
-            <div className="flex-shrink-0">
-              <AlertCircle className="h-5 w-5 text-red-400" />
-            </div>
+            <AlertCircle className="h-5 w-5 text-red-400 shrink-0" />
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800">Erro ao carregar dados</h3>
               <p className="text-sm text-red-700 mt-1">{error}</p>
@@ -179,23 +197,8 @@ const Dashboard: React.FC = () => {
     );
   }
 
-  if (!customer || !account) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-50">
-        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg shadow-sm">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <AlertCircle className="h-5 w-5 text-yellow-400" />
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-yellow-800">Dados não encontrados</h3>
-              <p className="text-sm text-yellow-700 mt-1">Não foi possível carregar as informações do cliente ou da conta.</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // Guarantee non-null for JSX below — both always set by fetchData
+  if (!customer || !account) return null;
 
   // Format document for display
   const formatDocument = (document: string) => {
@@ -258,24 +261,24 @@ const Dashboard: React.FC = () => {
               <div className="mt-8 flex flex-wrap gap-3">
                 <button
                   onClick={() => setIsDepositModalOpen(true)}
-                  className="flex items-center px-4 py-2.5 bg-white bg-opacity-10 hover:bg-opacity-20 text-white text-sm font-medium rounded-lg transition-all duration-150 ease-in-out shadow-sm hover:shadow-md"
+                  className="flex flex-col items-center justify-center p-3 w-24 bg-white/20 hover:bg-white/30 rounded-xl transition-colors border border-white/20"
                 >
-                  <ArrowDownLeft className="h-4 w-4 mr-2" />
-                  Depositar
+                  <ArrowDownLeft className="h-6 w-6 text-white" />
+                  <span className="text-sm font-medium text-white mt-2">Depositar</span>
                 </button>
                 <button
                   onClick={() => setIsWithdrawModalOpen(true)}
-                  className="flex items-center px-4 py-2.5 bg-white bg-opacity-10 hover:bg-opacity-20 text-white text-sm font-medium rounded-lg transition-all duration-150 ease-in-out shadow-sm hover:shadow-md"
+                  className="flex flex-col items-center justify-center p-3 w-24 bg-white/20 hover:bg-white/30 rounded-xl transition-colors border border-white/20"
                 >
-                  <ArrowUpRight className="h-4 w-4 mr-2" />
-                  Sacar
+                  <ArrowUpRight className="h-6 w-6 text-white" />
+                  <span className="text-sm font-medium text-white mt-2">Sacar</span>
                 </button>
                 <button
                   onClick={() => setIsTransferModalOpen(true)}
-                  className="flex items-center px-4 py-2.5 bg-white bg-opacity-10 hover:bg-opacity-20 text-white text-sm font-medium rounded-lg transition-all duration-150 ease-in-out shadow-sm hover:shadow-md"
+                  className="flex flex-col items-center justify-center p-3 w-24 bg-white/20 hover:bg-white/30 rounded-xl transition-colors border border-white/20"
                 >
-                  <Send className="h-4 w-4 mr-2" />
-                  Transferir
+                  <Send className="h-6 w-6 text-white" />
+                  <span className="text-sm font-medium text-white mt-2">Transferir</span>
                 </button>
               </div>
             </div>

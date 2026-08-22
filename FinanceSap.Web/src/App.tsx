@@ -15,7 +15,8 @@ import AuthLayout from './components/AuthLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Loans from './pages/Loans';
-import LoanApprovals from './pages/Admin/LoanApprovals';
+import Transactions from './pages/Transactions';
+import LoanApprovals from './pages/LoanApprovals';
 
 /**
  * Main application component with routing configuration.
@@ -35,7 +36,7 @@ const App: React.FC = () => {
             </ProtectedRoute>
           }>
             <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/transactions" element={<div>Transactions Page</div>} />
+            <Route path="/transactions" element={<Transactions />} />
             <Route path="/loans" element={<Loans />} />
             <Route path="/admin/loans" element={<LoanApprovals />} />
           </Route>
